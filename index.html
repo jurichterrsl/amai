@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Woordje</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#EDF0F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14181C" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Woordje">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --paper:#EDF0F2; --raise:#FFFFFF; --ink:#17202B; --mute:#67747F;
+  --delft:#2F5D8C; --delft-deep:#1D3E63; --moss:#3F6B52; --clay:#8C3D2C;
+  --line:#D2D9DE; --line-soft:#E1E6EA;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --serif:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --paper:#14181C; --raise:#1D242B; --ink:#E4E9ED; --mute:#8B98A3;
+    --delft:#83AAD6; --delft-deep:#A8C6E4; --moss:#79B08F; --clay:#D08A76;
+    --line:#2C353D; --line-soft:#232B32; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:17px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior:none;
+}
+#app{flex:1;display:flex;flex-direction:column;width:100%;max-width:34rem;margin:0 auto;padding:0 1.25rem}
+.screen{flex:1;display:flex;flex-direction:column;min-height:0}
+.grow{flex:1;min-height:0}
+.center{display:flex;flex-direction:column;justify-content:center}
+
+/* ---- type ---- */
+h1{font-family:var(--serif);font-weight:600;font-size:1.5rem;letter-spacing:-.01em;margin:0}
+.word{font-family:var(--serif);font-weight:600;letter-spacing:-.02em;line-height:1.05;
+  font-size:clamp(2.4rem,11vw,3.4rem);margin:0;overflow-wrap:break-word;hyphens:auto}
+.word.long{font-size:clamp(1.7rem,7.5vw,2.5rem)}
+.gloss{font-size:1.25rem;line-height:1.35;margin:.6rem 0 0}
+.sentence{font-family:var(--serif);font-size:1.4rem;line-height:1.45;margin:0}
+.meta{font-size:.82rem;color:var(--mute);margin:0}
+.art{color:var(--mute);font-weight:400}
+.dim{color:var(--mute)}
+.tag{display:inline-block;font-size:.7rem;color:var(--mute);border:1px solid var(--line);
+  border-radius:2px;padding:.05rem .35rem;vertical-align:.15em}
+
+/* ---- header ---- */
+header{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;
+  padding:1.1rem 0 .9rem;border-bottom:1px solid var(--line-soft)}
+header .n{font-variant-numeric:tabular-nums;font-size:.82rem;color:var(--mute)}
+
+/* ---- buttons ---- */
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.btn{display:block;width:100%;padding:.85rem 1rem;border-radius:10px;border:1px solid var(--line);
+  background:var(--raise);text-align:left;font-size:1.02rem;transition:transform .08s ease}
+.btn:active{transform:scale(.985)}
+.btn:focus-visible,button:focus-visible{outline:2px solid var(--delft);outline-offset:2px}
+.btn.primary{background:var(--delft);border-color:var(--delft);color:#fff;text-align:center;font-weight:500}
+@media (prefers-color-scheme:dark){.btn.primary{color:#0F1418}}
+.btn.ghost{background:transparent}
+.btn.correct{border-color:var(--moss);box-shadow:inset 0 0 0 1px var(--moss)}
+.btn.wrong{border-color:var(--clay);box-shadow:inset 0 0 0 1px var(--clay);opacity:.75}
+.stack{display:flex;flex-direction:column;gap:.55rem}
+.row{display:flex;gap:.5rem}
+.row>*{flex:1}
+.link{color:var(--delft);text-decoration:underline;text-underline-offset:3px;font-size:.9rem;padding:.4rem 0}
+.grade{padding:.8rem .4rem;border-radius:10px;border:1px solid var(--line);background:var(--raise);
+  text-align:center;font-size:.88rem;line-height:1.2}
+.grade b{display:block;font-weight:500;font-size:.95rem}
+.grade small{color:var(--mute);font-size:.72rem;font-variant-numeric:tabular-nums}
+.bottom{padding:1rem 0 1.4rem;display:flex;flex-direction:column;gap:.55rem}
+
+/* ---- the frequency ladder: the one loud element ---- */
+.ladder{position:relative;width:44px;flex:0 0 44px;align-self:stretch;margin-right:1.1rem}
+.ladder .track{position:absolute;left:21px;top:0;bottom:0;width:1px;background:var(--line)}
+.ladder .band{position:absolute;left:13px;width:17px;background:var(--delft);opacity:.16;
+  border-radius:9px;transition:top .45s cubic-bezier(.4,0,.2,1),height .45s cubic-bezier(.4,0,.2,1)}
+.ladder .now{position:absolute;left:9px;width:25px;height:25px;margin-top:-12px;border-radius:50%;
+  border:2px solid var(--delft);background:var(--paper);transition:top .45s cubic-bezier(.4,0,.2,1)}
+.ladder .tick{position:absolute;left:0;width:44px;font-size:.6rem;color:var(--mute);
+  font-variant-numeric:tabular-nums;text-align:right;padding-right:26px;margin-top:-.45em}
+.ladder .tick::after{content:"";position:absolute;right:18px;top:.45em;width:6px;height:1px;background:var(--line)}
+.testbody{display:flex;flex:1;min-height:0}
+.testmain{flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0}
+
+/* ---- misc ---- */
+.pool{border-top:1px solid var(--line-soft);padding:.6rem 0;display:flex;gap:.75rem;align-items:baseline}
+.pool .nl{font-family:var(--serif);font-size:1.05rem}
+.pool .de{flex:1;font-size:.88rem;color:var(--mute);text-align:right}
+.scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;min-height:0}
+.note{font-size:.85rem;color:var(--mute);line-height:1.45}
+input,textarea,select{font:inherit;color:inherit;background:var(--raise);border:1px solid var(--line);
+  border-radius:8px;padding:.6rem .7rem;width:100%}
+label{display:block;font-size:.8rem;color:var(--mute);margin:.7rem 0 .25rem}
+.done{font-family:var(--serif);font-size:2rem;line-height:1.15;margin:0 0 .5rem}
+hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
+.bar{height:2px;background:var(--line-soft);border-radius:2px;overflow:hidden;margin-top:.5rem}
+.bar i{display:block;height:100%;background:var(--delft);transition:width .3s ease}
+@media (max-width:400px){
+  .grade{padding:.75rem .15rem}
+  .grade b{font-size:.86rem}
+  .grade small{font-size:.66rem}
+  .row{gap:.35rem}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app"><div class="screen center" style="padding-bottom:4rem"><p class="dim">Laden…</p></div></div>
+
+<script src="fsrs.js"></script>
+<script src="words.js"></script>
+<script>
+"use strict";
+/* ============================================================
+   Woordje — Niederländisch B1/B2
+   Datenmodell in localStorage unter KEY. Export/Import als JSON.
+   ============================================================ */
+const KEY = "woordje.v1";
+const app = document.getElementById("app");
+
+// ---------- FSRS ----------
+const { fsrs, generatorParameters, createEmptyCard, Rating, State } = window.FSRSLib;
+let F = null;
+function makeF(retention){ F = fsrs(generatorParameters({ request_retention: retention, enable_fuzz: true })); }
+
+// ---------- Wortliste ----------
+let WORDS = [];         // nach rank sortiert, id === index
+function buildWords(st){
+  const base = window.WORDS.map(w => ({...w}));
+  const custom = (st.custom||[]).map(w => ({...w, custom:true}));
+  WORDS = base.concat(custom).sort((a,b)=>a.rank-b.rank);
+  WORDS.forEach((w,i)=>{ w.idx = i; if(w.key===undefined) w.key = w.nl; });
+}
+const byKey = k => WORDS.find(w=>w.key===k);
+
+// ---------- State ----------
+const todayStr = () => new Date().toISOString().slice(0,10);
+function freshState(){
+  return { v:1, placement:null, cards:{}, known:[], queue:[], custom:[],
+           settings:{ sessionSize:20, newPerDay:8, retention:0.90 },
+           daily:{ date:todayStr(), newDone:0 }, history:[] };
+}
+let S = freshState();
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      S = Object.assign(freshState(), p);
+      S.settings = Object.assign(freshState().settings, p.settings||{});
+      for(const k in S.cards){
+        const c = S.cards[k];
+        c.due = new Date(c.due);
+        if(c.last_review) c.last_review = new Date(c.last_review);
+      }
+    }
+  }catch(e){ console.warn("State konnte nicht gelesen werden:", e); }
+  if(S.daily.date !== todayStr()) S.daily = { date: todayStr(), newDone: 0 };
+  makeF(S.settings.retention);
+  buildWords(S);
+}
+let saveTimer=null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch(e){ alert("Speichern fehlgeschlagen: "+e.message); }
+  }, 60);
+}
+
+// ---------- Hilfen ----------
+const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shuffle = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const POSNAME = { ww:"Verb", zn:"Substantiv", bn:"Adjektiv", bw:"Adverb" };
+const blanks = c => c.replace(/\{[^}]+\}/g, "\u2009_____\u2009");
+const filled = c => c.replace(/\{([^}]+)\}/g, "$1");
+function fmtDue(d){
+  const mins = (d - Date.now())/60000;
+  if(mins < 60) return Math.max(1,Math.round(mins)) + " Min.";
+  if(mins < 1440) return Math.round(mins/60) + " Std.";
+  const days = mins/1440;
+  if(days < 31) return Math.round(days) + " T.";
+  if(days < 365) return Math.round(days/30.4) + " Mon.";
+  return (days/365).toFixed(1) + " J.";
+}
+function dueList(){
+  const now = Date.now();
+  return Object.keys(S.cards).filter(k => byKey(k) && S.cards[k].due <= now)
+    .sort((a,b)=> S.cards[a].due - S.cards[b].due);
+}
+
+// ---------- Routing ----------
+let view = "home", ctx = {};
+function go(v, c={}){ view=v; ctx=c; render(); window.scrollTo(0,0); }
+function render(){
+  const fns = { home:Home, test:Test, testDone:TestDone, session:Session, sessionDone:SessionDone,
+                pool:Pool, add:AddWord, data:Data };
+  app.innerHTML = "";
+  app.appendChild(fns[view]());
+}
+function el(html){ const t=document.createElement("template"); t.innerHTML=html.trim(); return t.content.firstElementChild; }
+function on(root, sel, fn, ev="click"){ root.querySelectorAll(sel).forEach(n=>n.addEventListener(ev, fn)); }
+
+function header(title, right){
+  return `<header><h1>${esc(title)}</h1><span class="n">${right||""}</span></header>`;
+}
+
+/* ============================================================
+   HOME
+   ============================================================ */
+function Home(){
+  const due = dueList();
+  const pool = Object.keys(S.cards).length;
+  const queued = S.queue.filter(k=>byKey(k)).length;
+  const newLeft = Math.max(0, S.settings.newPerDay - S.daily.newDone);
+  const canNew = Math.min(newLeft, queued);
+  const total = due.length + canNew;
+
+  let body;
+  if(!S.placement){
+    body = `
+      <div class="grow center">
+        <p class="word">Erst testen,<br>dann lernen.</p>
+        <p class="gloss dim">Die Einstufung sucht die Häufigkeitsgrenze, ab der du Wörter nicht
+        mehr sicher kennst. Nur was darüber liegt, kommt in den Lernpool.</p>
+        <p class="meta" style="margin-top:1.2rem">Etwa 35 Wörter, drei bis vier Minuten.</p>
+      </div>
+      <div class="bottom"><button class="btn primary" data-go="test">Einstufung starten</button></div>`;
+  } else if(total === 0){
+    const next = Object.keys(S.cards).map(k=>S.cards[k].due).sort((a,b)=>a-b)[0];
+    body = `
+      <div class="grow center">
+        <p class="done">Nichts fällig.</p>
+        <p class="gloss dim">${next ? "Das nächste Wort in " + fmtDue(next) : "Der Pool ist leer."}</p>
+        ${queued&&!newLeft ? `<p class="meta" style="margin-top:1rem">Tageslimit für neue Wörter erreicht. ${queued} warten.</p>`:""}
+      </div>
+      <div class="bottom">
+        <button class="btn ghost" data-go="pool">Pool ansehen</button>
+        <button class="btn ghost" data-go="data">Daten &amp; Einstellungen</button>
+      </div>`;
+  } else {
+    body = `
+      <div class="grow center">
+        <p class="word">${total}</p>
+        <p class="gloss">${total===1?"Wort wartet":"Wörter warten"}.</p>
+        <p class="meta" style="margin-top:1.4rem">
+          ${due.length} zur Wiederholung${canNew?` · ${canNew} neu`:""} ·
+          ${pool} im Pool${queued?` · ${queued} in der Warteschlange`:""}
+        </p>
+      </div>
+      <div class="bottom">
+        <button class="btn primary" data-go="session">Loslegen</button>
+        <div class="row">
+          <button class="btn ghost" data-go="pool">Pool</button>
+          <button class="btn ghost" data-go="data">Daten</button>
+        </div>
+      </div>`;
+  }
+  const n = document.createElement("div"); n.className="screen";
+  n.innerHTML = header("Woordje", S.placement ? `Grenze ≈ Rang ${S.placement.threshold}` : "") + body;
+  on(n, "[data-go]", e => {
+    const v = e.currentTarget.dataset.go;
+    if(v==="session") startSession(); else if(v==="test") startTest(); else go(v);
+  });
+  return n;
+}
+
+/* ============================================================
+   EINSTUFUNG — adaptive Treppe über die Häufigkeitsliste
+   ============================================================ */
+const T = {};
+function startTest(){
+  T.lo = 0; T.hi = WORDS.length-1;
+  T.pos = WORDS.findIndex(w=>w.rank>=2500); if(T.pos<0) T.pos = Math.floor(WORDS.length/2);
+  T.step = Math.max(8, Math.floor(WORDS.length/6));
+  T.dir = 0; T.reversals = 0; T.n = 0; T.max = 35; T.min = 18;
+  T.asked = new Set(); T.res = {}; T.pseudoHits = 0; T.pseudoShown = 0;
+  T.phase = "ask"; T.item = null; T.verifyAll = false;
+  nextTestItem();
+  go("test");
+}
+function nextTestItem(){
+  // gelegentlich ein erfundenes Wort einstreuen
+  if(T.n >= 3 && T.pseudoShown < 5 && Math.random() < 0.14){
+    T.pseudoShown++;
+    T.item = { pseudo:true, nl: pick(window.PSEUDO) };
+    T.phase = "ask"; return;
+  }
+  let p = T.pos, tries = 0;
+  while(T.asked.has(p) && tries++ < WORDS.length) p = (p+1) % WORDS.length;
+  T.pos = p; T.asked.add(p);
+  T.item = { pseudo:false, w: WORDS[p] };
+  T.phase = "ask";
+}
+function testAnswer(ans){ // "yes" | "unsure" | "no"
+  const it = T.item;
+  if(it.pseudo){
+    if(ans==="yes"){ T.pseudoHits++; T.verifyAll = true; }
+    T.n++;
+    return finishTestStep(null);
+  }
+  if(ans==="yes"){
+    const need = T.verifyAll || T.n < 3 || Math.random() < 0.45;
+    if(need){ T.phase = "verify"; T.item.options = mcOptions(it.w); return render(); }
+    return recordTest(true);
+  }
+  return recordTest(false);
+}
+function mcOptions(w){
+  const same = WORDS.filter(x=>x.pos===w.pos && x.key!==w.key);
+  const near = same.sort((a,b)=>Math.abs(a.idx-w.idx)-Math.abs(b.idx-w.idx)).slice(0,40);
+  const d = shuffle(near).slice(0,3).map(x=>x.de);
+  return shuffle([w.de, ...d]);
+}
+function recordTest(known){
+  T.res[T.item.w.key] = known;
+  T.n++;
+  finishTestStep(known);
+}
+function finishTestStep(known){
+  if(known !== null){
+    const newDir = known ? +1 : -1;
+    if(T.dir !== 0 && newDir !== T.dir){ T.reversals++; T.step = Math.max(3, Math.round(T.step/2)); }
+    T.dir = newDir;
+    T.pos = Math.min(WORDS.length-1, Math.max(0, T.pos + newDir*T.step));
+    if(known) T.lo = Math.max(T.lo, T.item.w.idx); else T.hi = Math.min(T.hi, T.item.w.idx);
+  }
+  if(T.n >= T.max) return endTest();
+  if(T.n >= T.min && T.reversals >= 6 && T.step <= 3 && fitThreshold().cost <= 1) return endTest();
+  nextTestItem(); render();
+}
+// Robuste Schwelle: der Schnitt, der am wenigsten Antworten widerspricht.
+// Ein einzelner Ausrutscher verschiebt das Ergebnis damit kaum.
+function fitThreshold(){
+  const obs = Object.keys(T.res).map(k => ({ i: byKey(k).idx, known: T.res[k] }))
+                                .sort((a,b)=>a.i-b.i);
+  if(!obs.length) return { cut: Math.floor(WORDS.length/2), cost: 0 };
+  const unknownBelow = c => obs.filter(o=>!o.known && o.i <= c).length;
+  const knownAbove   = c => obs.filter(o=> o.known && o.i >  c).length;
+  let best = Infinity, cuts = [];
+  const cands = [-1, ...obs.map(o=>o.i)];
+  for(const c of cands){
+    const k = unknownBelow(c) + knownAbove(c);
+    if(k < best){ best = k; cuts = [c]; } else if(k === best) cuts.push(c);
+  }
+  // Bei Gleichstand die tiefere Grenze wählen: ein Wort zu viel im Pool kostet
+  // einen Tipp auf ✕, ein Wort zu wenig bleibt für immer eine Lücke.
+  return { cut: cuts[0], cost: best };
+}
+function endTest(){
+  const { cut, cost } = fitThreshold();
+  const thr = WORDS[Math.min(WORDS.length-1, Math.max(0,cut))].rank;
+
+  S.placement = { done:true, at:new Date().toISOString(), cutIdx:cut, threshold:thr,
+                  asked:T.n, pseudoShown:T.pseudoShown, pseudoHits:T.pseudoHits };
+  // Bekanntes ausschliessen, alles darüber in die Warteschlange
+  S.known = WORDS.filter(w => w.idx <= cut && T.res[w.key] !== false).map(w=>w.key);
+  S.queue = WORDS.filter(w => !S.known.includes(w.key)).map(w=>w.key);
+  // Explizit gescheiterte Wörter unter der Grenze zuerst
+  S.queue.sort((a,b)=>{
+    const af = T.res[a]===false ? 0:1, bf = T.res[b]===false ? 0:1;
+    return af-bf || byKey(a).idx - byKey(b).idx;
+  });
+  save(); go("testDone");
+}
+function Test(){
+  const it = T.item, n = document.createElement("div"); n.className="screen";
+  const lg = x => Math.log(Math.max(200, x));
+  const lo = lg(200), hi = lg(50000);
+  const pctFor = r => Math.min(100, Math.max(0, (lg(r)-lo)/(hi-lo)*100));
+  const cur = it.pseudo ? pctFor(WORDS[T.pos].rank) : pctFor(it.w.rank);
+  const bTop = pctFor(WORDS[T.lo].rank), bBot = pctFor(WORDS[T.hi].rank);
+  const ticks = [500,2000,8000,30000].map(r =>
+    `<span class="tick" style="top:${pctFor(r)}%">${r>=1000?(r/1000)+"k":r}</span>`).join("");
+
+  let mainHtml;
+  if(T.phase === "verify"){
+    mainHtml = `
+      <p class="meta">Kurze Gegenprobe</p>
+      <p class="word${it.w.nl.length>12?" long":""}">${esc(it.w.nl)}</p>
+      <div class="stack" style="margin-top:1.6rem">
+        ${it.options.map(o=>`<button class="btn" data-v="${esc(o)}">${esc(o)}</button>`).join("")}
+      </div>`;
+  } else {
+    mainHtml = `
+      <p class="meta">${it.pseudo?"":`${POSNAME[it.w.pos]}${it.w.art?" · "+it.w.art:""}`}&nbsp;</p>
+      <p class="word${(it.pseudo?it.nl:it.w.nl).length>12?" long":""}">${esc(it.pseudo ? it.nl : it.w.nl)}</p>
+      <p class="gloss dim" style="margin-top:.8rem">Kennst du die Bedeutung?</p>`;
+  }
+
+  n.innerHTML =
+    header("Einstufung", `${T.n}/${T.max}`) +
+    `<div class="testbody">
+       <div class="ladder">
+         <div class="track"></div>${ticks}
+         <div class="band" style="top:${Math.min(bTop,bBot)}%;height:${Math.abs(bBot-bTop)}%"></div>
+         <div class="now" style="top:${cur}%"></div>
+       </div>
+       <div class="testmain">${mainHtml}</div>
+     </div>` +
+    (T.phase==="verify" ? `<div class="bottom"></div>` : `
+     <div class="bottom">
+       <button class="btn" data-a="yes">Ja, kenne ich</button>
+       <button class="btn" data-a="unsure">Unsicher</button>
+       <button class="btn" data-a="no">Nein</button>
+     </div>`);
+
+  on(n, "[data-a]", e => testAnswer(e.currentTarget.dataset.a));
+  on(n, "[data-v]", e => recordTest(e.currentTarget.dataset.v === it.w.de));
+  return n;
+}
+function TestDone(){
+  const p = S.placement;
+  const n = document.createElement("div"); n.className="screen";
+  const warn = p.pseudoHits > 0
+    ? `<p class="note" style="margin-top:1rem;color:var(--clay)">Du hast bei ${p.pseudoHits} von
+       ${p.pseudoShown} erfundenen Wörtern „ja“ gesagt. Die Grenze liegt also eher etwas zu hoch —
+       im Zweifel lieber ein paar Wörter mehr in den Pool nehmen.</p>` : "";
+  n.innerHTML = header("Einstufung", "fertig") + `
+    <div class="grow center">
+      <p class="word">Rang ${p.threshold}</p>
+      <p class="gloss">Ab hier wird es unsicher.</p>
+      <p class="note" style="margin-top:1.2rem">
+        ${S.known.length} Wörter gelten als bekannt und tauchen nicht mehr auf.
+        ${S.queue.length} stehen in der Warteschlange und kommen mit
+        ${S.settings.newPerDay} pro Tag dazu.</p>
+      ${warn}
+    </div>
+    <div class="bottom">
+      <button class="btn primary" data-go="session">Erste Runde</button>
+      <button class="btn ghost" data-go="pool">Warteschlange ansehen</button>
+    </div>`;
+  on(n,"[data-go]",e=> e.currentTarget.dataset.go==="session" ? startSession() : go("pool"));
+  return n;
+}
+
+/* ============================================================
+   LERNRUNDE
+   ============================================================ */
+const R = {};
+function startSession(){
+  if(!S.placement){ return startTest(); }
+  const due = dueList();
+  const newLeft = Math.max(0, S.settings.newPerDay - S.daily.newDone);
+  const fresh = S.queue.filter(k=>byKey(k) && !S.cards[k]).slice(0, newLeft);
+  R.items = shuffle(due.slice(0, S.settings.sessionSize)).concat(fresh)
+              .slice(0, S.settings.sessionSize + fresh.length);
+  R.i = 0; R.answered = 0; R.right = 0; R.newIntroduced = 0;
+  if(!R.items.length) return go("home");
+  prepCard(); go("session");
+}
+// Kartentyp: Erkennen für neue/junge Karten, Lückentext sobald die Stabilität trägt
+function cardMode(key){
+  const c = S.cards[key], w = byKey(key);
+  if(!w.cloze || !/\{/.test(w.cloze)) return "recall";
+  if(!c || c.state === State.New) return "recall";
+  if(c.stability >= 7 || c.reps >= 3) return Math.random() < 0.7 ? "cloze" : "recall";
+  return Math.random() < 0.25 ? "cloze" : "recall";
+}
+function prepCard(){
+  const key = R.items[R.i], w = byKey(key);
+  R.key = key; R.w = w; R.mode = cardMode(key); R.revealed = false; R.chosen = null;
+  R.isNew = !S.cards[key];
+  if(R.mode === "cloze"){
+    const same = WORDS.filter(x=>x.pos===w.pos && x.key!==w.key);
+    const near = same.sort((a,b)=>Math.abs(a.idx-w.idx)-Math.abs(b.idx-w.idx)).slice(0,40);
+    R.options = shuffle([w, ...shuffle(near).slice(0,3)]);
+  }
+  const sched = F.repeat(S.cards[key] || createEmptyCard(new Date()), new Date());
+  R.preview = { 1:sched[1].card.due, 2:sched[2].card.due, 3:sched[3].card.due, 4:sched[4].card.due };
+}
+function grade(rating){
+  const key = R.key;
+  const prev = S.cards[key] || createEmptyCard(new Date());
+  const out = F.repeat(prev, new Date())[rating];
+  if(!S.cards[key]){ S.daily.newDone++; R.newIntroduced++; S.queue = S.queue.filter(k=>k!==key); }
+  S.cards[key] = out.card;
+  S.history.push({ k:key, r:rating, t:Date.now() });
+  if(S.history.length > 4000) S.history = S.history.slice(-3000);
+  R.answered++; if(rating >= 3) R.right++;
+  save();
+  R.i++;
+  if(R.i >= R.items.length) return go("sessionDone");
+  prepCard(); render();
+}
+function Session(){
+  const w = R.w, n = document.createElement("div"); n.className="screen";
+  const prog = Math.round(R.i / R.items.length * 100);
+  const head = header("Runde", `${R.i+1}/${R.items.length}`) +
+    `<div class="bar"><i style="width:${prog}%"></i></div>`;
+
+  const grades = `
+    <div class="row">
+      <button class="grade" data-g="1"><b>Nochmal</b><small>${fmtDue(R.preview[1])}</small></button>
+      <button class="grade" data-g="2"><b>Schwer</b><small>${fmtDue(R.preview[2])}</small></button>
+      <button class="grade" data-g="3"><b>Gut</b><small>${fmtDue(R.preview[3])}</small></button>
+      <button class="grade" data-g="4"><b>Leicht</b><small>${fmtDue(R.preview[4])}</small></button>
+    </div>`;
+
+  let body, bottom;
+  if(R.mode === "recall"){
+    body = `
+      <div class="grow center">
+        <p class="meta">${POSNAME[w.pos]}${R.isNew?' <span class="tag">neu</span>':""}</p>
+        <p class="word${w.nl.length>12?" long":""}">${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}</p>
+        ${R.revealed ? `
+          <p class="gloss">${esc(w.de)}</p>
+          <p class="sentence dim" style="margin-top:1.4rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>
+        ` : `<p class="gloss dim">&nbsp;</p>`}
+      </div>`;
+    bottom = R.revealed ? `<div class="bottom">${grades}</div>`
+      : `<div class="bottom"><button class="btn primary" data-reveal>Bedeutung zeigen</button></div>`;
+  } else {
+    const shown = R.chosen === null;
+    body = `
+      <div class="grow center">
+        <p class="meta">Welches Wort passt?</p>
+        <p class="sentence">${esc(blanks(w.cloze))}</p>
+        ${shown ? `
+          <div class="stack" style="margin-top:1.6rem">
+            ${R.options.map(o=>`<button class="btn" data-c="${esc(o.key)}">${esc(o.nl)}</button>`).join("")}
+          </div>` : `
+          <div class="stack" style="margin-top:1.6rem">
+            ${R.options.map(o=>{
+              const cls = o.key===w.key ? "btn correct" : (o.key===R.chosen ? "btn wrong" : "btn");
+              return `<div class="${cls}" style="cursor:default">${esc(o.nl)}${o.key===w.key?` <span class="dim" style="font-size:.85rem">— ${esc(o.de)}</span>`:""}</div>`;
+            }).join("")}
+          </div>
+          <p class="sentence" style="margin-top:1.3rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>`}
+      </div>`;
+    bottom = shown ? `<div class="bottom"><button class="btn ghost" data-c="__idk">Weiss ich nicht</button></div>`
+                   : `<div class="bottom">${grades}</div>`;
+  }
+
+  n.innerHTML = head + body + bottom +
+    `<div style="padding-bottom:1rem"><button class="link" data-quit>Runde beenden</button>
+      <button class="link" data-skip style="float:right">Wort ist mir bekannt</button></div>`;
+
+  on(n,"[data-reveal]", ()=>{ R.revealed = true; render(); });
+  on(n,"[data-g]", e=> grade(Number(e.currentTarget.dataset.g)));
+  on(n,"[data-c]", e=>{
+    const v = e.currentTarget.dataset.c;
+    R.chosen = v === "__idk" ? "" : v;
+    R.correct = R.chosen === w.key;
+    render();
+  });
+  on(n,"[data-quit]", ()=> go(R.answered ? "sessionDone" : "home"));
+  on(n,"[data-skip]", ()=>{
+    if(!confirm(`„${w.nl}“ dauerhaft als bekannt markieren?`)) return;
+    S.known.push(w.key); delete S.cards[w.key]; S.queue = S.queue.filter(k=>k!==w.key);
+    save(); R.i++;
+    if(R.i >= R.items.length) return go("sessionDone");
+    prepCard(); render();
+  });
+  return n;
+}
+function SessionDone(){
+  const n = document.createElement("div"); n.className="screen";
+  const pct = R.answered ? Math.round(R.right/R.answered*100) : 0;
+  n.innerHTML = header("Runde", "fertig") + `
+    <div class="grow center">
+      <p class="done">Fertig für jetzt.</p>
+      <p class="gloss dim">${R.answered} Karten, ${pct} % auf Anhieb gewusst${R.newIntroduced?`, ${R.newIntroduced} neu dazu`:""}.</p>
+      <p class="note" style="margin-top:1.4rem">Der Rest kommt von allein wieder.</p>
+    </div>
+    <div class="bottom">
+      <button class="btn ghost" data-go="home">Schliessen</button>
+      ${dueList().length ? `<button class="btn primary" data-go="more">Noch eine Runde</button>`:""}
+    </div>`;
+  on(n,"[data-go]", e=> e.currentTarget.dataset.go==="more" ? startSession() : go("home"));
+  return n;
+}
+
+/* ============================================================
+   POOL
+   ============================================================ */
+function Pool(){
+  const n = document.createElement("div"); n.className="screen";
+  const active = Object.keys(S.cards).filter(byKey)
+    .sort((a,b)=>S.cards[a].due - S.cards[b].due);
+  const queued = S.queue.filter(k=>byKey(k) && !S.cards[k]);
+  const row = (k, right) => {
+    const w = byKey(k);
+    return `<div class="pool"><span class="nl">${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}</span>
+      <span class="de">${esc(w.de)}</span><span class="meta" style="width:4.2rem;text-align:right">${right}</span>
+      <button class="link" data-drop="${esc(k)}" style="padding:0">✕</button></div>`;
+  };
+  n.innerHTML = header("Pool", `${active.length} aktiv`) + `
+    <div class="scroll">
+      <p class="note" style="margin:.9rem 0">Im Umlauf. ✕ markiert ein Wort dauerhaft als bekannt.</p>
+      ${active.map(k=>row(k, fmtDue(S.cards[k].due))).join("") || `<p class="note">Noch nichts.</p>`}
+      <hr>
+      <p class="note">Warteschlange — ${queued.length} Wörter, ${S.settings.newPerDay} pro Tag.</p>
+      ${queued.slice(0,150).map(k=>row(k,"")).join("")}
+      ${queued.length>150?`<p class="note">… und ${queued.length-150} weitere.</p>`:""}
+    </div>
+    <div class="bottom">
+      <div class="row">
+        <button class="btn ghost" data-go="add">Wort hinzufügen</button>
+        <button class="btn ghost" data-go="home">Zurück</button>
+      </div>
+    </div>`;
+  on(n,"[data-drop]", e=>{
+    const k = e.currentTarget.dataset.drop;
+    S.known.push(k); delete S.cards[k]; S.queue = S.queue.filter(x=>x!==k); save(); render();
+  });
+  on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));
+  return n;
+}
+
+/* ============================================================
+   EIGENES WORT
+   ============================================================ */
+function AddWord(){
+  const n = document.createElement("div"); n.className="screen";
+  n.innerHTML = header("Wort hinzufügen") + `
+    <div class="scroll">
+      <p class="note" style="margin:.9rem 0">Für Wörter, die dir im Alltag begegnen. Sie landen sofort im Pool.</p>
+      <label for="f-nl">Niederländisch</label><input id="f-nl" autocapitalize="none" autocorrect="off">
+      <label for="f-art">Artikel (nur Substantive)</label>
+      <select id="f-art"><option value="">—</option><option>de</option><option>het</option></select>
+      <label for="f-de">Deutsch</label><input id="f-de">
+      <label for="f-pos">Wortart</label>
+      <select id="f-pos"><option value="ww">Verb</option><option value="zn">Substantiv</option>
+        <option value="bn">Adjektiv</option><option value="bw">Adverb</option></select>
+      <label for="f-cl">Beispielsatz — Zielwort in geschweifte Klammern</label>
+      <textarea id="f-cl" rows="2" placeholder="Ik {aarzelde} even."></textarea>
+      <label for="f-rk">Geschätzter Häufigkeitsrang</label>
+      <input id="f-rk" type="number" inputmode="numeric" value="9000">
+    </div>
+    <div class="bottom">
+      <button class="btn primary" data-save>Speichern</button>
+      <button class="btn ghost" data-go="pool">Abbrechen</button>
+    </div>`;
+  on(n,"[data-save]", ()=>{
+    const g = id => n.querySelector("#"+id).value.trim();
+    const nl = g("f-nl"), de = g("f-de");
+    if(!nl || !de){ alert("Niederländisch und Deutsch sind nötig."); return; }
+    if(WORDS.some(w=>w.nl===nl)){ alert(`„${nl}“ ist schon in der Liste.`); return; }
+    const w = { nl, art:g("f-art")||null, de, pos:g("f-pos"), cloze:g("f-cl")||nl,
+                rank:Number(g("f-rk"))||9000, key:nl };
+    S.custom.push(w); buildWords(S);
+    S.queue.unshift(nl); S.known = S.known.filter(k=>k!==nl);
+    save(); go("pool");
+  });
+  on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));
+  return n;
+}
+
+/* ============================================================
+   DATEN & EINSTELLUNGEN
+   ============================================================ */
+function Data(){
+  const n = document.createElement("div"); n.className="screen";
+  const s = S.settings;
+  n.innerHTML = header("Daten &amp; Einstellungen") + `
+    <div class="scroll">
+      <label for="s-size">Karten pro Runde</label>
+      <input id="s-size" type="number" inputmode="numeric" min="5" max="100" value="${s.sessionSize}">
+      <label for="s-new">Neue Wörter pro Tag</label>
+      <input id="s-new" type="number" inputmode="numeric" min="0" max="40" value="${s.newPerDay}">
+      <label for="s-ret">Zielgenauigkeit (FSRS, 0.80–0.97)</label>
+      <input id="s-ret" type="number" step="0.01" min="0.8" max="0.97" value="${s.retention}">
+      <p class="note" style="margin-top:.4rem">Höher heisst häufiger wiederholen. 0.90 ist der Normalfall.</p>
+      <button class="btn" data-apply style="margin-top:.9rem">Übernehmen</button>
+      <hr>
+      <p class="note">Alles liegt nur auf diesem Gerät. Exportiere ab und zu — ein gelöschter
+      Safari-Speicher nimmt sonst den Lernstand mit.</p>
+      <div class="stack" style="margin-top:.7rem">
+        <button class="btn" data-export>Sicherung exportieren</button>
+        <button class="btn" data-import>Sicherung einlesen</button>
+        <button class="btn" data-retest>Einstufung wiederholen</button>
+        <button class="btn" data-reset>Alles zurücksetzen</button>
+      </div>
+      <input type="file" id="f-imp" accept="application/json" style="display:none">
+      <hr>
+      <p class="note">${Object.keys(S.cards).length} aktive Karten · ${S.known.length} als bekannt
+      abgelegt · ${S.queue.length} in der Warteschlange · ${S.history.length} Bewertungen
+      insgesamt${S.placement?` · Einstufung vom ${new Date(S.placement.at).toLocaleDateString("de-CH")}`:""}.</p>
+    </div>
+    <div class="bottom"><button class="btn ghost" data-go="home">Zurück</button></div>`;
+
+  on(n,"[data-apply]", ()=>{
+    s.sessionSize = Math.max(5, Number(n.querySelector("#s-size").value)||20);
+    s.newPerDay   = Math.max(0, Number(n.querySelector("#s-new").value)||0);
+    s.retention   = Math.min(0.97, Math.max(0.8, Number(n.querySelector("#s-ret").value)||0.9));
+    makeF(s.retention); save(); render();
+  });
+  on(n,"[data-export]", ()=>{
+    const blob = new Blob([JSON.stringify(S)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `woordje-${todayStr()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  on(n,"[data-import]", ()=> n.querySelector("#f-imp").click());
+  on(n,"#f-imp", e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        localStorage.setItem(KEY, rd.result);
+        load(); go("home");
+      }catch(err){ alert("Datei konnte nicht gelesen werden: "+err.message); }
+    };
+    rd.readAsText(f);
+  }, "change");
+  on(n,"[data-retest]", ()=>{ if(confirm("Die Einstufung neu machen? Der aktuelle Lernstand der Karten bleibt erhalten.")) startTest(); });
+  on(n,"[data-reset]", ()=>{
+    if(!confirm("Wirklich alles löschen — Einstufung, Pool und Lernstand?")) return;
+    localStorage.removeItem(KEY); S = freshState(); makeF(S.settings.retention); buildWords(S); go("home");
+  });
+  on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));
+  return n;
+}
+
+/* ============================================================
+   Start
+   ============================================================ */
+load();
+render();
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
+</script>
+</body>
+</html>
