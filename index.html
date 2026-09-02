@@ -106,6 +106,11 @@ label{display:block;font-size:.8rem;color:var(--mute);margin:.7rem 0 .25rem}
 .done{font-family:var(--serif);font-size:2rem;line-height:1.15;margin:0 0 .5rem}
 hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
 .bar{height:2px;background:var(--line-soft);border-radius:2px;overflow:hidden;margin-top:.5rem}
+.boxrow{display:flex;align-items:center;gap:.6rem;padding:.28rem 0}
+.boxlab{width:4.6rem;font-size:.82rem;color:var(--mute);flex:none}
+.boxbar{flex:1;height:6px;background:var(--line-soft);border-radius:3px;overflow:hidden}
+.boxbar i{display:block;height:100%;background:var(--delft);border-radius:3px}
+.boxn{width:3rem;text-align:right;font-size:.82rem;color:var(--mute);font-variant-numeric:tabular-nums}
 .bar i{display:block;height:100%;background:var(--delft);transition:width .3s ease}
 @media (max-width:400px){
   .grade{padding:.75rem .15rem}
@@ -150,9 +155,20 @@ function buildWords(st){
   const custom = (st.custom||[]).map(w => ({...w, custom:true}));
   WORDS = base.concat(custom).sort((a,b)=>a.rank-b.rank);
   WORDS.forEach((w,i)=>{ w.idx = i; if(w.key===undefined) w.key = w.nl; });
-  buildTest();
+  buildTest(); buildGloss();
 }
 const byKey = k => WORDS.find(w=>w.key===k);
+// Mehrere niederländische Wörter können dieselbe deutsche Bedeutung haben.
+// Wer eines davon tippt, hat die Vokabel gewusst — auch wenn ein anderes gemeint war.
+let BYGLOSS = new Map();
+function buildGloss(){
+  BYGLOSS = new Map();
+  WORDS.forEach(w => {
+    const k = w.de.toLowerCase();
+    if(!BYGLOSS.has(k)) BYGLOSS.set(k, []);
+    BYGLOSS.get(k).push(w.nl);
+  });
+}
 
 // ---------- State ----------
 const todayStr = () => new Date().toISOString().slice(0,10);
@@ -205,6 +221,30 @@ function fmtDue(d){
   if(days < 365) return Math.round(days/30.4) + " Mon.";
   return (days/365).toFixed(1) + " J.";
 }
+// Die fünf Listen sind eine Anzeige über dem FSRS-Zustand, kein eigener Mechanismus.
+// „Noch n Wiederholungen" leitet sich aus der Stabilität ab: wie lange ein Wort
+// hält, bevor die Erinnerung unter die Zielgenauigkeit fällt.
+const BOXES = [
+  { id:"neu",  label:"Neu" },
+  { id:"b3",   label:"Noch 3" },
+  { id:"b2",   label:"Noch 2" },
+  { id:"b1",   label:"Noch 1" },
+  { id:"kann", label:"Gekonnt" },
+];
+function boxOf(key){
+  if(S.known.includes(key)) return "kann";
+  const c = S.cards[key];
+  if(!c) return "neu";
+  if(c.stability >= 30) return "kann";
+  if(c.stability >= 10) return "b1";
+  if(c.stability >= 2)  return "b2";
+  return "b3";
+}
+function boxCounts(){
+  const n = { neu:0, b3:0, b2:0, b1:0, kann:0 };
+  WORDS.forEach(w => n[boxOf(w.key)]++);
+  return n;
+}
 function endOfDay(){ const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); }
 // Alles, was heute noch dran wäre, zählt zu heute — und jedes Wort nur einmal
 // pro Tag, damit die Runde ein Ende hat.
@@ -213,12 +253,6 @@ function dueList(){
   return Object.keys(S.cards)
     .filter(k => byKey(k) && S.cards[k].due <= cut && S.cards[k].seenDay !== today)
     .sort((a,b)=> S.cards[a].due - S.cards[b].due);
-}
-// Für "trotzdem üben": das, was als Nächstes ansteht, vorgezogen. Bewusst ohne
-// die Einmal-pro-Tag-Regel — wer freiwillig weitermacht, soll das können.
-function upcoming(limit){
-  return Object.keys(S.cards).filter(byKey)
-    .sort((a,b)=> S.cards[a].due - S.cards[b].due).slice(0, limit);
 }
 
 // ---------- Routing ----------
@@ -252,13 +286,6 @@ function backupAge(){
   return days >= 30 ? days : null;
 }
 function Home(){
-  const due = dueList();
-  const pool = Object.keys(S.cards).length;
-  const queued = S.queue.filter(k=>byKey(k)).length;
-  const allow = newAllowance();
-  const newLeft = Math.max(0, allow - S.daily.newDone);
-  const canNew = Math.min(newLeft, nextNew(newLeft).length);
-  const total = due.length + canNew;
 
   let body;
   if(!S.placement){
@@ -270,34 +297,21 @@ function Home(){
         <p class="meta" style="margin-top:1.2rem">Etwa 35 Wörter, drei bis vier Minuten.</p>
       </div>
       <div class="bottom"><button class="btn primary" data-go="test">Einstufung starten</button></div>`;
-  } else if(total === 0){
-    const more = upcoming(1).length;
-    body = `
-      <div class="grow center">
-        <p class="done">Für heute erledigt.</p>
-        <p class="gloss dim">${pool ? "Morgen geht es weiter." : "Der Pool ist leer."}</p>
-        ${queued&&!newLeft ? `<p class="meta" style="margin-top:1rem">Heutige Menge an neuen Wörtern ist durch. ${queued} warten.</p>`:""}
-      </div>
-      <div class="bottom">
-        ${more ? `<button class="btn ghost" data-go="extra">Trotzdem üben</button>`:""}
-        <div class="row">
-          <button class="btn ghost" data-go="pool">Pool</button>
-          <button class="btn ghost" data-go="data">Daten</button>
-        </div>
-      </div>`;
   } else {
+    const c = boxCounts(), done = c.kann, all = WORDS.length;
+    const bar = BOXES.map(b => {
+      const v = c[b.id]; if(!v) return "";
+      return `<div class="boxrow"><span class="boxlab">${b.label}</span>
+        <span class="boxbar"><i style="width:${Math.max(2, v/all*100)}%"></i></span>
+        <span class="boxn">${v}</span></div>`;
+    }).join("");
     body = `
       <div class="grow center">
-        <p class="word">${total}</p>
-        <p class="gloss">${total===1?"Wort wartet":"Wörter warten"}.</p>
-        <p class="meta" style="margin-top:1.4rem">
-          ${due.length} zur Wiederholung${canNew?` · ${canNew} neu`:""} ·
-          ${pool} im Pool${queued?` · ${queued} wartet`:""}
-        </p>
+        <p class="word">${done}<span class="dim" style="font-size:.4em"> / ${all}</span></p>
+        <p class="gloss dim">gekonnt</p>
+        <div style="margin-top:1.6rem">${bar}</div>
       </div>
       <div class="bottom">
-        ${backupAge() ? `<p class="note" style="margin:0 0 .3rem">Letzte Sicherung vor ${backupAge()} Tagen.
-          <button class="link" data-go="data" style="padding:0">Jetzt sichern</button></p>`:""}
         <button class="btn primary" data-go="session">Loslegen</button>
         <div class="row">
           <button class="btn ghost" data-go="pool">Pool</button>
@@ -306,11 +320,10 @@ function Home(){
       </div>`;
   }
   const n = document.createElement("div"); n.className="screen";
-  n.innerHTML = header("Amai", S.placement ? `Grenze ≈ Rang ${S.placement.threshold}` : "") + body;
+  n.innerHTML = header("Amai", S.placement ? `ab Rang ${S.placement.threshold}` : "") + body;
   on(n, "[data-go]", e => {
     const v = e.currentTarget.dataset.go;
     if(v==="session") startSession();
-    else if(v==="extra") startSession(true);
     else if(v==="test") startTest();
     else go(v);
   });
@@ -327,13 +340,16 @@ function startTest(){
   T.step = Math.max(8, Math.floor(TEST.length/6));
   T.dir = 0; T.reversals = 0; T.n = 0; T.max = 35; T.min = 18;
   T.asked = new Set(); T.res = {}; T.pseudoHits = 0; T.pseudoShown = 0;
+  // Kontrollitems an feste Positionen setzen statt zu würfeln: bei einem Test von
+  // 18 Fragen kamen sonst in jedem fünften Durchlauf gar keine vor.
+  T.pseudoAt = new Set([4, 9, 15, 22, 29].map(x => x + Math.floor(Math.random()*2)));
   T.phase = "ask"; T.item = null; T.verifyAll = false;
   nextTestItem();
   go("test");
 }
 function nextTestItem(){
   // gelegentlich ein erfundenes Wort einstreuen
-  if(T.n >= 3 && T.pseudoShown < 5 && Math.random() < 0.14){
+  if(T.pseudoAt.has(T.n) && T.pseudoShown < 5){
     T.pseudoShown++;
     T.item = { pseudo:true, nl: pick(window.PSEUDO) };
     T.phase = "ask"; return;
@@ -479,8 +495,8 @@ function TestDone(){
       <p class="gloss">Ab hier wird es unsicher.</p>
       <p class="note" style="margin-top:1.2rem">
         ${S.known.length} Wörter gelten als bekannt und tauchen nicht mehr auf.
-        ${S.queue.length} stehen in der Warteschlange und kommen mit
-        ${S.settings.newPerDay} pro Tag dazu.</p>
+        ${S.queue.length} stehen in der Warteschlange und kommen nach und nach dazu —
+        in deinem Tempo, ohne Tagesziel.</p>
       ${warn}
     </div>
     <div class="bottom">
@@ -495,23 +511,26 @@ function TestDone(){
    LERNRUNDE
    ============================================================ */
 const R = {};
-// Wie viele neue Wörter heute vertretbar sind. Läuft es schlecht, kommen weniger
-// dazu; läuft es gut, ein paar mehr.
-function newAllowance(){
-  const base = S.settings.newPerDay;
+// Neue Wörter werden pro Runde zugeteilt, nicht pro Kalendertag. Wer eine Woche
+// pausiert, hat nichts „verpasst" — das Tempo hängt daran, wie oft du übst.
+// Der Anteil sinkt, wenn viel zu wiederholen ist oder die Trefferquote fällt.
+function newShare(dueCount){
+  const size = S.settings.sessionSize;
+  let share = Math.max(0, size - Math.min(dueCount, Math.round(size * 0.7)));
   const recent = S.history.slice(-40);
-  if(recent.length < 15) return base;
-  const hit = recent.filter(h => h.r >= 3).length / recent.length;
-  if(hit < 0.65) return Math.max(1, Math.round(base * 0.3));
-  if(hit < 0.80) return Math.max(1, Math.round(base * 0.6));
-  if(hit > 0.92) return Math.round(base * 1.4);
-  return base;
+  if(recent.length >= 15){
+    const hit = recent.filter(h => h.r >= 3).length / recent.length;
+    if(hit < 0.65) share = Math.round(share * 0.3);
+    else if(hit < 0.80) share = Math.round(share * 0.6);
+    else if(hit > 0.92) share = Math.round(share * 1.3);
+  }
+  return Math.max(1, share);
 }
 // Neue Wörter kommen nur aus einem Fenster oberhalb deiner Grenze. Das Fenster
 // wächst mit jeder Karte, die es in den Langzeitrhythmus geschafft hat — damit
 // nicht nach zwei Wochen Rang 5000 ansteht.
 function bandTop(){
-  const solid = Object.keys(S.cards).filter(k => byKey(k) && S.cards[k].state === State.Review).length;
+  const solid = S.known.length + Object.keys(S.cards).filter(k => byKey(k) && S.cards[k].stability >= 10).length;
   const base = S.placement ? S.placement.threshold : 1200;
   return base + 500 + solid * 60;
 }
@@ -520,16 +539,15 @@ function nextNew(limit){
   const inBand = avail.filter(k => byKey(k).rank <= bandTop());
   return (inBand.length ? inBand : avail).slice(0, limit);
 }
-function startSession(extra){
+function startSession(){
   if(!S.placement){ return startTest(); }
+  // Am längsten überfällige zuerst. Ein Rückstand wird nie angezeigt und nie
+  // eingefordert — er läuft über die nächsten Runden von selbst ab.
   const due = dueList();
-  // Zusatzrunden ziehen nur Wiederholungen vor. Neue Wörter bleiben beim Tagesmass,
-  // sonst wäre die Bremse gegen zu viel Schweres auf einmal wirkungslos.
-  const fresh = extra ? [] : nextNew(Math.max(0, newAllowance() - S.daily.newDone));
-  const base = extra ? upcoming(S.settings.sessionSize) : due;
-  R.items = shuffle(base.slice(0, S.settings.sessionSize)).concat(fresh)
-              .slice(0, S.settings.sessionSize + fresh.length);
-  R.i = 0; R.answered = 0; R.right = 0; R.newIntroduced = 0; R.repeats = {};
+  const reps = due.slice(0, Math.round(S.settings.sessionSize * 0.7));
+  const fresh = nextNew(newShare(due.length));
+  R.items = shuffle(reps.concat(fresh));
+  R.i = 0; R.answered = 0; R.right = 0; R.repeats = {};
   if(!R.items.length) return go("home");
   prepCard(); go("session");
 }
@@ -556,19 +574,29 @@ function splitArticle(s){
 // Die Bewertung leitet sich aus der Antwort ab, nicht aus einer Selbsteinschätzung.
 // Richtig und flott = Leicht, richtig aber zäh = Schwer, Schreibfehler = Schwer,
 // falsch oder nicht gewusst = Nochmal.
-function autoRating(verdict, ms, w){
+function autoRating(verdict, ms, w, first){
   if(verdict === "wrong" || verdict === "idk" || verdict === "empty") return 1;
-  if(verdict === "typo" || verdict === "article") return 2;
+  if(verdict === "synonym") return 3;
+  if(verdict === "typo" || verdict === "article" || verdict === "noarticle") return 2;
+  if(first) return 4;
   const budget = 4000 + w.nl.length * 400;   // Lesen, überlegen, tippen
   return ms < budget ? 4 : ms < budget * 2.5 ? 3 : 2;
 }
 function judge(input, w){
   const got = splitArticle(norm(input)), want = norm(w.nl);
   if(!got.word) return { verdict:"empty" };
-  const artWrong = got.art && w.art && got.art !== w.art;
-  if(got.word === want) return { verdict: artWrong ? "article" : "right" };
+  // Bei Substantiven gehört der Artikel zum Wort. Fehlt er, ist die Antwort
+  // unvollständig — das Geschlecht ist im Niederländischen nicht ableitbar.
+  const needArt = w.pos === "zn" && w.art;
+  if(got.word === want){
+    if(needArt && !got.art) return { verdict:"noarticle" };
+    if(needArt && got.art !== w.art) return { verdict:"article" };
+    return { verdict:"right" };
+  }
   if(lev(got.word, want) === 1) return { verdict:"typo" };
   const other = WORDS.find(x => norm(x.nl) === got.word);
+  if(other && (BYGLOSS.get(w.de.toLowerCase())||[]).includes(other.nl))
+    return { verdict:"synonym", other };
   return { verdict:"wrong", other };
 }
 function prepCard(){
@@ -581,9 +609,21 @@ function prepCard(){
 }
 function grade(rating){
   const key = R.key;
+  // Wer ein Wort beim allerersten Kontakt auf Anhieb tippt, kennt es. Aussortieren.
+  // Alles, was einmal danebenging, muss dagegen mehrere Abfragen überstehen.
+  if(R.isNew && rating === 4 && R.judged && R.judged.verdict === "right"){
+    S.known.push(key);
+    S.queue = S.queue.filter(k => k !== key);
+    S.triaged = (S.triaged || 0) + 1;
+    R.retired = (R.retired || 0) + 1;
+    R.answered++; R.right++;
+    save(); R.i++;
+    if(R.i >= R.items.length) return go("sessionDone");
+    prepCard(); return render();
+  }
   const prev = S.cards[key] || createEmptyCard(new Date());
   const out = F.repeat(prev, new Date())[rating];
-  if(!S.cards[key]){ S.daily.newDone++; R.newIntroduced++; S.queue = S.queue.filter(k=>k!==key); }
+  if(!S.cards[key]){ S.daily.newDone++; S.queue = S.queue.filter(k=>k!==key); }
   out.card.seenDay = todayStr();
   S.cards[key] = out.card;
   S.history.push({ k:key, r:rating, t:Date.now() });
@@ -609,11 +649,11 @@ function Session(){
   if(R.phase === "ask"){
     body = `
       <div class="grow center">
-        <p class="meta">${POSNAME[w.pos]}${w.art?" · de oder het":""} — auf Niederländisch?${R.isNew?' <span class="tag">neu</span>':""}</p>
+        <p class="meta">${POSNAME[w.pos]}${w.art?" · mit Artikel":""} — auf Niederländisch?${R.isNew?' <span class="tag">neu</span>':""}</p>
         <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
         <p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>
         <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
-               spellcheck="false" lang="nl" enterkeyhint="go" placeholder="tippen…"
+               spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
                style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">
       </div>`;
     bottom = `<div class="bottom">
@@ -623,12 +663,15 @@ function Session(){
 
   } else {
     const v = R.judged.verdict;
-    const rating = autoRating(v, R.elapsed, w);
-    const colour = v==="right" ? "var(--moss)" : v==="typo"||v==="article" ? "var(--delft)" : "var(--clay)";
+    const rating = autoRating(v, R.elapsed, w, R.isNew);
+    const colour = v==="right" ? "var(--moss)"
+      : (v==="typo"||v==="article"||v==="noarticle"||v==="synonym") ? "var(--delft)" : "var(--clay)";
     const verdictText = {
       right:  "Richtig.",
       typo:   "Fast — achte auf die Schreibweise.",
-      article: `Richtig, aber es heisst <b>${w.art}</b>.`,
+      article: `Richtig, aber es heisst <b>${w.art} ${esc(w.nl)}</b>.`,
+      noarticle: `Fast — mit Artikel: <b>${w.art} ${esc(w.nl)}</b>.`,
+      synonym: `Auch richtig. Gesucht war <b>${w.art?w.art+" ":""}${esc(w.nl)}</b>.`,
       wrong:  R.judged.other ? `Das ist „${esc(R.judged.other.de)}“.` : "Nicht ganz.",
       idk:    "",
       empty:  ""
@@ -682,7 +725,7 @@ function Session(){
     n.addEventListener("keydown", e => {
       if(e.key !== "Enter") return;
       e.preventDefault();
-      grade(autoRating(R.judged && R.judged.verdict, R.elapsed, R.w));
+      grade(autoRating(R.judged && R.judged.verdict, R.elapsed, R.w, R.isNew));
     });
     setTimeout(()=>{ try{ n.querySelector("[data-g]").focus(); }catch(e){} }, 30);
   }
@@ -693,13 +736,13 @@ function SessionDone(){
   const pct = R.answered ? Math.round(R.right/R.answered*100) : 0;
   n.innerHTML = header("Runde", "fertig") + `
     <div class="grow center">
-      <p class="done">Fertig für heute.</p>
-      <p class="gloss dim">${R.answered} Karten, ${pct} % auf Anhieb gewusst${R.newIntroduced?`, ${R.newIntroduced} neu dazu`:""}.</p>
+      <p class="done">Fertig.</p>
+      <p class="gloss dim">${R.answered} Karten, ${pct} % auf Anhieb gewusst${R.retired?`, ${R.retired} aussortiert`:""}.</p>
       <p class="note" style="margin-top:1.4rem">Der Rest kommt von allein wieder.</p>
     </div>
     <div class="bottom">
       <button class="btn ghost" data-go="home">Schliessen</button>
-      ${dueList().length ? `<button class="btn primary" data-go="more">Weiter</button>`:""}
+      <button class="btn primary" data-go="more">Weiter</button>
     </div>`;
   on(n,"[data-go]", e=> e.currentTarget.dataset.go==="more" ? startSession() : go("home"));
   return n;
@@ -710,23 +753,34 @@ function SessionDone(){
    ============================================================ */
 function Pool(){
   const n = document.createElement("div"); n.className="screen";
-  const active = Object.keys(S.cards).filter(byKey)
-    .sort((a,b)=>S.cards[a].due - S.cards[b].due);
-  const queued = S.queue.filter(k=>byKey(k) && !S.cards[k]);
   const row = (k, right) => {
     const w = byKey(k);
     return `<div class="pool"><span class="nl">${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}</span>
       <span class="de">${esc(w.de)}</span><span class="meta" style="width:4.2rem;text-align:right">${right}</span>
       <button class="link" data-drop="${esc(k)}" style="padding:0">✕</button></div>`;
   };
-  n.innerHTML = header("Pool", `${active.length} aktiv`, true) + `
+  const c = boxCounts();
+  const inBox = id => WORDS.filter(w => boxOf(w.key) === id).map(w => w.key);
+  const section = b => {
+    if(!c[b.id]) return "";
+    const ks = inBox(b.id);
+    const head = `<hr><p class="note">${b.label} — ${c[b.id]} Wörter</p>`;
+    if(b.id === "kann") return head + `<p class="note dim">Aussortiert, kommen nicht mehr.</p>`;
+    if(b.id === "neu"){
+      // Reihenfolge der Warteschlange, nicht nach Rang — selbst hinzugefügte
+      // Wörter stehen vorn und sollen auch vorn auftauchen.
+      const pos = new Map(S.queue.map((k,i)=>[k,i]));
+      const sorted = ks.slice().sort((a,b2)=>
+        (pos.has(a)?pos.get(a):1e9)-(pos.has(b2)?pos.get(b2):1e9) || byKey(a).rank-byKey(b2).rank);
+      return head + sorted.slice(0,60).map(k=>row(k,"")).join("") +
+        (sorted.length>60?`<p class="note">… und ${sorted.length-60} weitere.</p>`:"");
+    }
+    return head + ks.map(k=>row(k, S.cards[k] ? fmtDue(S.cards[k].due) : "")).join("");
+  };
+  n.innerHTML = header("Pool", `${c.kann}/${WORDS.length}`, true) + `
     <div class="scroll">
-      <p class="note" style="margin:.9rem 0">Im Umlauf. ✕ markiert ein Wort dauerhaft als bekannt.</p>
-      ${active.map(k=>row(k, fmtDue(S.cards[k].due))).join("") || `<p class="note">Noch nichts.</p>`}
-      <hr>
-      <p class="note">Warteschlange — ${queued.length} Wörter, ${S.settings.newPerDay} pro Tag.</p>
-      ${queued.slice(0,150).map(k=>row(k,"")).join("")}
-      ${queued.length>150?`<p class="note">… und ${queued.length-150} weitere.</p>`:""}
+      <p class="note" style="margin:.9rem 0">✕ sortiert ein Wort dauerhaft aus.</p>
+      ${BOXES.map(section).join("")}
     </div>
     <div class="bottom">
       <button class="btn ghost" data-go="add">Wort hinzufügen</button>
@@ -787,18 +841,19 @@ function Data(){
     <div class="scroll">
       <label for="s-size">Karten pro Runde</label>
       <input id="s-size" type="number" inputmode="numeric" min="5" max="100" value="${s.sessionSize}">
-      <label for="s-new">Neue Wörter pro Tag (Richtwert)</label>
-      <input id="s-new" type="number" inputmode="numeric" min="0" max="40" value="${s.newPerDay}">
-      <p class="note" style="margin-top:.4rem">Die App weicht davon ab: bei vielen Fehlern
-      kommen weniger neue Wörter, bei einer hohen Trefferquote ein paar mehr.
-      Aktuell: ${newAllowance()} pro Tag. Neue Wörter kommen bis Rang ${bandTop()};
-      diese Grenze wächst mit jeder gefestigten Karte.</p>
+
+      <p class="note" style="margin-top:.4rem">Neue Wörter kommen pro Runde, nicht pro Tag —
+      eine Pause kostet dich nichts. Wie viele, hängt davon ab, wie viel gerade zu
+      wiederholen ist und wie es läuft. Zurzeit kommen sie bis Rang ${bandTop()};
+      diese Grenze wächst mit jedem gefestigten Wort.</p>
       <label for="s-ret">Zielgenauigkeit (FSRS, 0.80–0.97)</label>
       <input id="s-ret" type="number" step="0.01" min="0.8" max="0.97" value="${s.retention}">
       <p class="note" style="margin-top:.4rem">Höher heisst häufiger wiederholen. 0.90 ist der Normalfall.</p>
       <button class="btn" data-apply style="margin-top:.9rem">Übernehmen</button>
       <hr>
-      <p class="note">CSV ist zum Anschauen — jedes Wort mit Status und nächstem Termin,
+      <p class="note">„In Dateien speichern" öffnet das Teilen-Menü — von dort in
+      iCloud Drive legen, dann liegt die Sicherung ausserhalb des Telefons.
+      CSV ist zum Anschauen — jedes Wort mit Status und nächstem Termin,
       öffnet sich in Numbers oder Excel. JSON ist die Sicherung, mit der sich der Lernstand
       wiederherstellen lässt.</p>
       <p class="note">Alles liegt nur auf diesem Gerät. Als Web-App auf dem Home-Bildschirm ist
@@ -809,7 +864,7 @@ function Data(){
                      : "Noch nie gesichert."}</p>
       <div class="stack" style="margin-top:.7rem">
         <button class="btn" data-progress>Fortschritt exportieren (CSV)</button>
-        <button class="btn" data-export>Sicherung exportieren (JSON)</button>
+        <button class="btn" data-export>Sicherung in Dateien speichern</button>
         <button class="btn" data-import>Sicherung einlesen</button>
         <button class="btn" data-wanted>Wunschliste exportieren</button>
         <button class="btn" data-retest>Einstufung wiederholen</button>
@@ -825,15 +880,25 @@ function Data(){
 
   on(n,"[data-apply]", ()=>{
     s.sessionSize = Math.max(5, Number(n.querySelector("#s-size").value)||20);
-    s.newPerDay   = Math.max(0, Number(n.querySelector("#s-new").value)||0);
     s.retention   = Math.min(0.97, Math.max(0.8, Number(n.querySelector("#s-ret").value)||0.9));
     makeF(s.retention); save(); render();
   });
-  on(n,"[data-export]", ()=>{
-    const blob = new Blob([JSON.stringify(S)], {type:"application/json"});
+  on(n,"[data-export]", async ()=>{
+    const name = `amai-sicherung-${todayStr()}.json`;
+    const text = JSON.stringify(S);
+    // Über das Teilen-Menü landet die Datei direkt in „Dateien" und damit in
+    // iCloud Drive. Wo das nicht geht, bleibt der normale Download.
+    try{
+      const file = new File([text], name, { type:"application/json" });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        await navigator.share({ files:[file], title:"Amai-Sicherung" });
+        S.lastExport = Date.now(); save(); render();
+        return;
+      }
+    }catch(e){ if(e && e.name === "AbortError") return; }
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `amai-sicherung-${todayStr()}.json`;
+    a.href = URL.createObjectURL(new Blob([text], {type:"application/json"}));
+    a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     S.lastExport = Date.now(); save(); render();
   });

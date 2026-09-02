@@ -22,6 +22,10 @@ Datenbereich.
 Alles liegt in `localStorage` auf dem Telefon. Nichts wird hochgeladen — auch wer die
 Seite öffnet, sieht nur eine leere App.
 
+Unter *Daten* legt **In Dateien speichern** die Sicherung über das Teilen-Menü ab.
+Von dort in iCloud Drive gelegt, liegt sie ausserhalb des Telefons. Automatisch geht
+das nicht: eine Web-App darf nicht von sich aus in iCloud schreiben.
+
 Geschützt gegen: Safaris Sieben-Tage-Aufräumung, normales Schliessen, Neustart.
 Beim Start fordert die App zusätzlich dauerhaften Speicher an
 (`navigator.storage.persist`), was auf unterstützenden Systemen vor der automatischen
@@ -76,87 +80,59 @@ Zielrang auf wenige Ränge genau (799, 1997, 4996, 8996 für die Ziele 800, 2000
 und 9000). Bei 15 % zufällig falschen Antworten liegt der Median bei 799, 1996, 4821
 und 9000. Der Test braucht dafür 19 bis 30 Fragen.
 
-## Tagesrhythmus
+## Die fünf Fächer
 
-Die App ist auf einmal am Tag ausgelegt. Fällig ist alles, was bis heute Abend
-dran wäre, und jedes Wort kommt höchstens einmal pro Tag — innerhalb einer Runde
-darf es sich wiederholen, danach ist es für heute durch. Deshalb steht kein
-Countdown auf der Startseite: entweder ist etwas fällig, oder es heisst
-*Für heute erledigt*.
+Auf der Startseite steht der Fortschritt durch die Liste, gegliedert in fünf Fächer:
+**Neu**, **Noch 3**, **Noch 2**, **Noch 1**, **Gekonnt**.
 
-Wer trotzdem weitermachen will, drückt *Trotzdem üben*. Das zieht Wiederholungen
-vor, bringt aber keine zusätzlichen neuen Wörter — sonst wäre die Bremse unten
-wirkungslos.
+Das ist eine Anzeige, kein eigener Mechanismus. Darunter läuft weiter FSRS; das
+Fach ergibt sich aus der Stabilität eines Wortes — also daraus, wie lange es hält,
+bevor die Erinnerung unter die Zielgenauigkeit fällt:
 
-## Tempo
+| Fach | Stabilität |
+|---|---|
+| Noch 3 | unter 2 Tagen |
+| Noch 2 | 2 bis 10 Tage |
+| Noch 1 | 10 bis 30 Tage |
+| Gekonnt | ab 30 Tagen, oder beim Erstkontakt aussortiert |
 
-Zwei Bremsen sorgen dafür, dass nicht zu viel Schweres auf einmal kommt.
+Leitner-Fächer mit festen Abständen wären die klassische Umsetzung, aber sie
+ignorieren, wie schwer ein einzelnes Wort für dich ist. FSRS schätzt das pro Wort
+aus den Antworten. Die Fächer sind das Bild davon.
 
-**Die Tagesmenge passt sich an.** Der Richtwert steht in den Einstellungen, aber die
-App weicht davon ab: Liegt die Trefferquote der letzten 40 Abfragen unter 65 %,
-kommen nur noch 30 % davon dazu; unter 80 % sind es 60 %; über 92 % gibt es 40 %
-mehr.
+## Aussortieren
 
-**Neue Wörter kommen aus einem Fenster.** Es beginnt 500 Ränge über deiner Grenze
-und wächst um 60 Ränge pro Karte, die es in den Langzeitrhythmus geschafft hat.
-Ohne dieses Fenster stünde nach zwei Wochen Rang 3000 an, egal wie es läuft.
+**Beim allerersten Kontakt richtig getippt** heisst: du kennst das Wort. Es wandert
+sofort nach *Gekonnt* und kommt nie wieder. Dafür ist die App gebaut — nicht Wörter
+lernen, sondern die Lücken finden.
 
-Zehn simulierte Tage ab Grenze 500, je nach Trefferquote:
+**Ein Wort, das einmal danebenging**, muss mehrere Abfragen mit wachsendem Abstand
+überstehen, bevor es aussortiert wird. Ein einziger Treffer kurz nach dem Fehler
+sagt fast nichts darüber aus, ob das Wort in einem Monat noch da ist.
 
-| Trefferquote | neue Wörter pro Tag | nach 10 Tagen |
+## Tempo und Pausen
+
+Es gibt kein Tagesziel. Neue Wörter werden **pro Runde** zugeteilt, nicht pro
+Kalendertag — eine Woche Pause kostet dich also nichts.
+
+Eine Runde besteht aus höchstens 70 % Wiederholungen, am längsten überfällige
+zuerst, der Rest sind neue Wörter. Der Anteil neuer Wörter sinkt, wenn die
+Trefferquote der letzten 40 Abfragen fällt.
+
+**Ein Rückstand wird nie angezeigt und nie eingefordert.** Wer nach einem Monat
+zurückkommt, bekommt dieselbe Runde wie immer; der Stau läuft über die folgenden
+Runden von selbst ab. Zehn Runden simuliert, ab Grenze 500:
+
+| Trefferquote | bearbeitete Wörter je Runde | nach 10 Runden |
 |---|---|---|
-| 90 % | 8 → 11 | 86 Wörter, bis Rang 1958 |
-| 75 % | schwankt 5–8 | 62 Wörter, bis Rang 1677 |
-| 50 % | fällt auf 2 | 32 Wörter, bis Rang 1501 |
+| 90 % | 20 → 6 | 116 Wörter, bis Rang 2502 |
+| 75 % | 20 → 6 | 88 Wörter, bis Rang 2018 |
+| 50 % | 20 → 6 | 74 Wörter, bis Rang 1802 |
 
-Was du nicht kennst und wofür es noch keine Karte gibt, landet auf einer Wunschliste.
-Unter *Daten* lässt sie sich exportieren — das ist die Vorlage für die nächste
-Wortcharge.
-
-## Wie eine Karte abläuft
-
-**Jedes Wort beginnt als Abfrage — auch beim allerersten Mal.** Die deutsche
-Bedeutung steht oben, darunter der Beispielsatz mit Lücke, darunter ein
-Eingabefeld. Nichts wird vorher vorgezeigt.
-
-Das ist Absicht: ein Rateversuch vor der Auflösung verankert ein Wort besser als
-blosses Anschauen, auch wenn der Versuch danebengeht. Bei einem neuen Wort tippst
-du also einmal ins Leere, drückst *Weiss ich nicht* und siehst dann die Lösung —
-genau das ist der Lerneffekt. Neue Wörter tragen die Markierung *neu*.
-
-Geurteilt wird in vier Stufen:
-
-| Eingabe | Urteil |
-|---|---|
-| genau richtig | **Richtig** |
-| ein Zeichen daneben | **Fast — achte auf die Schreibweise** |
-| richtig, falscher Artikel | **Richtig, aber es heisst het/de** |
-| ein anderes Wort aus der Liste | **Das ist „…“** mit dessen Bedeutung |
-
-Gross- und Kleinschreibung, Satzzeichen und überzählige Leerzeichen werden
-ignoriert. Den Artikel darfst du mitschreiben, musst du aber nicht.
-
-*Weiss ich nicht* zeigt die Lösung sofort. Das Wort bleibt im Pool und kommt in
-derselben Runde noch einmal.
-
-Du bewertest nichts selbst. Die Stufe für FSRS ergibt sich aus der Antwort:
-
-| | |
-|---|---|
-| falsch oder *Weiss ich nicht* | Nochmal |
-| Schreibfehler oder falscher Artikel | Schwer |
-| richtig, aber zäh | Schwer |
-| richtig | Gut |
-| richtig und flott | Leicht |
-
-„Flott" richtet sich nach der Wortlänge: rund vier Sekunden plus 0,4 pro Zeichen
-zum Lesen, Überlegen und Tippen. Über dem Zweieinhalbfachen davon zählt es als
-mühsam. Auf dem Ergebnisbildschirm steht, wann das Wort dadurch wiederkommt.
-
-Die Tastatur reicht durch die ganze Runde: Enter prüft, Enter geht weiter.
-
-Karten, die auf „in wenigen Minuten“ gesetzt werden, hängt die Runde hinten wieder
-an — höchstens zweimal pro Wort, damit eine Runde nicht endlos wird.
+Die Abstände selbst rechnet FSRS weiter in echten Tagen, nicht in Nutzungstagen.
+Vergessen richtet sich nach verstrichener Zeit, nicht danach, wie oft die App
+offen war. Was sich an deinem Tempo orientiert, ist die **Menge**, nicht der
+**Zeitpunkt**.
 
 ## Wörter ergänzen
 
@@ -182,9 +158,10 @@ Nach jeder Änderung an den Dateien die Versionsnummer in `sw.js` erhöhen
 ## Was hier nicht drin ist
 
 - Keine Aussprache, kein Audio.
-- Keine Alternativantworten: Wenn zwei niederländische Wörter dieselbe deutsche
-  Bedeutung haben, zählt nur das hinterlegte. Der Beispielsatz mit Lücke soll das
-  eingrenzen, trifft aber nicht immer.
+- Wo zwei niederländische Wörter dieselbe deutsche Bedeutung tragen, zählt jedes
+  von beiden als richtig; die App nennt danach das gesuchte Wort. Bei rund 3 % der
+  Einträge kommt das noch vor — der Rest ist von Hand auseinandergehalten
+  („der Herr (Anrede)" gegen „der Herr (Gebieter)").
 - Keine Serien, keine Erinnerungen, keine Push-Nachrichten. Wenn du drei Tage nicht
   reinschaust, passiert nichts — FSRS holt das von selbst wieder auf.
 - Kein Sync zwischen Geräten. Export und Import sind der Weg.
