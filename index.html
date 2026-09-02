@@ -119,6 +119,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
+const VERSION = "v14";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -154,7 +155,7 @@ function buildGloss(){
 const todayStr = () => new Date().toISOString().slice(0,10);
 function freshState(){
   return { v:1, cards:{}, known:[], custom:[], lastExport:null,
-           settings:{ sessionSize:20, newPerDay:8, retention:0.90 },
+           settings:{ sessionSize:7, newPerDay:8, retention:0.90 },
            daily:{ date:todayStr(), newDone:0 }, history:[] };
 }
 let S = freshState();
@@ -190,6 +191,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&
 const shuffle = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
 const pick = a => a[Math.floor(Math.random()*a.length)];
 const POSNAME = { ww:"Verb", zn:"Substantiv", bn:"Adjektiv", bw:"Adverb" };
+const hasCloze = w => w.cloze && w.cloze.indexOf("{") >= 0;
 const blanks = c => c.replace(/\{[^}]+\}/g, "\u2009_____\u2009");
 const filled = c => c.replace(/\{([^}]+)\}/g, "$1");
 function fmtDue(d){
@@ -425,10 +427,14 @@ function grade(rating){
   S.history.push({ k:key, r:rating, t:Date.now() });
   if(S.history.length > 4000) S.history = S.history.slice(-3000);
   R.answered++; if(rating >= 3) R.right++;
-  // Was noch in dieser Runde fällig wird, kommt in dieser Runde zurück.
-  const backIn = (out.card.due - Date.now())/60000;
+  // In derselben Runde wiederholt wird nur, was du gar nicht wusstest — also
+  // „Weiss ich nicht" oder eine falsche Antwort. Ein Tippfehler oder ein falscher
+  // Artikel zählt als gewusst und kommt erst beim nächsten Termin wieder.
   R.repeats = R.repeats || {};
-  if(backIn < 12 && (R.repeats[key]||0) < 2){ R.repeats[key] = (R.repeats[key]||0)+1; R.items.push(key); }
+  if(rating === 1 && (R.repeats[key]||0) < 1){
+    R.repeats[key] = (R.repeats[key]||0) + 1;
+    R.items.push(key);
+  }
   save();
   R.i++;
   if(R.i >= R.items.length) return go("sessionDone");
@@ -437,7 +443,7 @@ function grade(rating){
 function Session(){
   const w = R.w, n = document.createElement("div"); n.className="screen";
   const prog = Math.round(R.i / R.items.length * 100);
-  const head = header("Runde", `${R.i+1}/${R.items.length}`) +
+  const head = header("Runde", `${R.i+1}/${R.items.length}${R.isNew?" · neu":""}`) +
     `<div class="bar"><i style="width:${prog}%"></i></div>`;
   const artLine = w.art ? `<span class="art">${w.art} </span>` : "";
   let body, bottom;
@@ -445,9 +451,8 @@ function Session(){
   if(R.phase === "ask"){
     body = `
       <div class="grow center">
-        <p class="meta">${POSNAME[w.pos]}${w.art?" · mit Artikel":""} — auf Niederländisch?${R.isNew?' <span class="tag">neu</span>':""}</p>
         <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
-        <p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>
+        ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>` : ""}
         <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
                spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
                style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">
@@ -460,6 +465,7 @@ function Session(){
   } else {
     const v = R.judged.verdict;
     const rating = autoRating(v, R.elapsed, w, R.isNew);
+    const retires = R.isNew && rating === 4 && v === "right";
     const colour = v==="right" ? "var(--moss)"
       : (v==="typo"||v==="article"||v==="noarticle"||v==="synonym") ? "var(--delft)" : "var(--clay)";
     const verdictText = {
@@ -468,7 +474,7 @@ function Session(){
       article: `Richtig, aber es heisst <b>${w.art} ${esc(w.nl)}</b>.`,
       noarticle: `Fast — mit Artikel: <b>${w.art} ${esc(w.nl)}</b>.`,
       synonym: `Auch richtig. Gesucht war <b>${w.art?w.art+" ":""}${esc(w.nl)}</b>.`,
-      wrong:  R.judged.other ? `Das ist „${esc(R.judged.other.de)}“.` : "Nicht ganz.",
+      wrong:  R.judged.other ? `Das ist „${esc(R.judged.other.de)}“.` : "Leider nicht.",
       idk:    "",
       empty:  ""
     }[v] || "";
@@ -478,11 +484,13 @@ function Session(){
         <p class="word${w.nl.length>12?" long":""}">${artLine}${esc(w.nl)}</p>
         <p class="gloss dim">${esc(w.de)}</p>
         ${R.typed && v!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(R.typed)}</p>` : ""}
-        <p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>
+        ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>` : ""}
       </div>`;
     bottom = `<div class="bottom">
         <p class="note" style="margin:0 0 .3rem;text-align:center">${
-          (R.preview[rating]-Date.now()) < 86400000 ? "Kommt in dieser Runde noch einmal"
+          retires ? "Gekonnt — kommt nicht mehr"
+          : rating === 1 ? "Kommt in dieser Runde noch einmal"
+          : (R.preview[rating] - Date.now()) < 86400000 ? "Morgen wieder"
           : "Wieder in " + fmtDue(R.preview[rating])}</p>
         <button class="btn primary" data-g="${rating}">Weiter</button>
       </div>`;
@@ -662,13 +670,14 @@ function Data(){
         <button class="btn" data-progress>Fortschritt exportieren (CSV)</button>
         <button class="btn" data-export>Sicherung in Dateien speichern</button>
         <button class="btn" data-import>Sicherung einlesen</button>
+        <button class="btn" data-update>Nach Aktualisierung suchen</button>
         <button class="btn" data-reset>Alles zurücksetzen</button>
       </div>
       <input type="file" id="f-imp" accept="application/json" style="display:none">
       <hr>
       <p class="note">${Object.keys(S.cards).length} aktive Karten · ${S.known.length} als bekannt
       abgelegt · ${queued().length} in der Warteschlange · ${S.history.length} Bewertungen
-      insgesamt.</p>
+      insgesamt · Version ${VERSION}.</p>
     </div>
     <div class="bottom"></div>`;
 
@@ -732,6 +741,7 @@ function Data(){
     };
     rd.readAsText(f);
   }, "change");
+  on(n,"[data-update]", e => checkUpdate(e.currentTarget));
   on(n,"[data-reset]", ()=>{
     if(!confirm("Wirklich alles löschen — Pool und Lernstand?")) return;
     localStorage.removeItem(KEY); S = freshState(); makeF(S.settings.retention); buildWords(S); go("home");
@@ -751,8 +761,31 @@ if(navigator.storage && navigator.storage.persist){
     .then(ok => { PERSIST = ok ? "gesichert" : "nicht gesichert"; })
     .catch(()=>{});
 }
+// Aktualisierung: bei jedem Start nach einer neuen Fassung suchen. Übernimmt der
+// neue Service Worker, wird einmal neu geladen — sonst zeigt die App weiter die
+// zwischengespeicherte alte Fassung.
+let SWREG = null, RELOADING = false;
 if("serviceWorker" in navigator){
-  window.addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
+  navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+    if(RELOADING) return;
+    RELOADING = true; location.reload();
+  });
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js")
+      .then(reg => { SWREG = reg; return reg.update(); })
+      .catch(()=>{});
+  });
+}
+function checkUpdate(btn){
+  if(!SWREG){ alert("Aktualisierung nicht verfügbar — die App läuft ohne Service Worker."); return; }
+  btn.textContent = "Suche…";
+  SWREG.update()
+    .then(()=> new Promise(r => setTimeout(r, 1200)))
+    .then(()=>{
+      if(SWREG.installing || SWREG.waiting){ btn.textContent = "Neue Fassung gefunden, lade neu…"; }
+      else { btn.textContent = "Schon aktuell (" + VERSION + ")"; setTimeout(()=>render(), 1800); }
+    })
+    .catch(()=>{ btn.textContent = "Suche fehlgeschlagen"; });
 }
 </script>
 </body>

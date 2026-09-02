@@ -82,8 +82,9 @@ aus den Antworten. Die Fächer sind das Bild davon.
 ## Aussortieren
 
 **Beim allerersten Kontakt richtig getippt** heisst: du kennst das Wort. Es wandert
-sofort nach *Gekonnt* und kommt nie wieder. Dafür ist die App gebaut — nicht Wörter
-lernen, sondern die Lücken finden.
+sofort nach *Gekonnt*, es wird gar keine Karte angelegt, und der Bildschirm sagt
+*Gekonnt — kommt nicht mehr*, statt einen Termin zu nennen. Dafür ist die App
+gebaut — nicht Wörter lernen, sondern die Lücken finden.
 
 **Ein Wort, das einmal danebenging**, muss mehrere Abfragen mit wachsendem Abstand
 überstehen, bevor es aussortiert wird. Ein einziger Treffer kurz nach dem Fehler
@@ -94,8 +95,9 @@ sagt fast nichts darüber aus, ob das Wort in einem Monat noch da ist.
 Es gibt kein Tagesziel. Neue Wörter werden **pro Runde** zugeteilt, nicht pro
 Kalendertag — eine Woche Pause kostet dich also nichts.
 
-Eine Runde besteht aus höchstens 70 % Wiederholungen, am längsten überfällige
-zuerst, der Rest sind neue Wörter. Der Anteil neuer Wörter sinkt, wenn die
+Eine Runde umfasst standardmässig **sieben Karten** (unter *Daten* änderbar) und
+besteht aus höchstens 70 % Wiederholungen, am längsten überfällige zuerst, der Rest
+sind neue Wörter. Der Anteil neuer Wörter sinkt, wenn die
 Trefferquote der letzten 40 Abfragen fällt.
 
 **Ein Rückstand wird nie angezeigt und nie eingefordert.** Wer nach einem Monat
@@ -131,8 +133,27 @@ Lückentext verschwindet — bei trennbaren Verben beide Teile, etwa
 `Het {viel} me {op} dat ...`. `rank` steuert nur, wo das Wort in der Einstufung
 auftaucht; eine grobe Schätzung genügt.
 
-Nach jeder Änderung an den Dateien die Versionsnummer in `sw.js` erhöhen
-(`amai-v1` → `amai-v2`), sonst serviert der Cache weiter die alte Fassung.
+## Aktualisieren
+
+Nach jeder Änderung an den Dateien **zwei Stellen** hochzählen, sonst serviert der
+Cache weiter die alte Fassung:
+
+- `CACHE` in `sw.js` (`amai-v12` → `amai-v13`)
+- `VERSION` in `index.html` (`v12` → `v13`)
+
+Die App sucht beim Start selbst nach einer neuen Fassung und lädt einmal neu,
+sobald der neue Service Worker übernimmt. Unter *Daten* stehen die laufende
+Version und ein Knopf *Nach Aktualisierung suchen*.
+
+Wenn das iPhone trotzdem an der alten Fassung hängt, in dieser Reihenfolge:
+
+1. App über den App-Umschalter ganz schliessen und zweimal neu öffnen — beim ersten
+   Start wird der neue Service Worker geholt, beim zweiten ist er aktiv.
+2. Unter *Daten* auf *Nach Aktualisierung suchen* tippen.
+3. Die Seite in Safari mit angehängtem `?v=2` öffnen. Diese Adresse steht nicht im
+   Cache, wird also frisch geladen.
+4. Erst als letztes Mittel: Icon vom Home-Bildschirm löschen und neu hinzufügen.
+   **Das löscht den Lernstand** — vorher unter *Daten* sichern.
 
 ## Was hier nicht drin ist
 
