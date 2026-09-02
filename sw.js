@@ -1,7 +1,7 @@
 // Amai service worker — App-Shell offline halten.
 // Bei jeder Änderung an den Dateien die Versionsnummer erhöhen.
-const CACHE = "amai-v10";
-const SHELL = ["./", "./index.html", "./words.js", "./testwords.js", "./fsrs.js",
+const CACHE = "amai-v12";
+const SHELL = ["./", "./index.html", "./words.js", "./fsrs.js",
                "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {

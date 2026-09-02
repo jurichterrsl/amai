@@ -81,19 +81,6 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .grade small{color:var(--mute);font-size:.72rem;font-variant-numeric:tabular-nums}
 .bottom{padding:1rem 0 1.4rem;display:flex;flex-direction:column;gap:.55rem}
 
-/* ---- the frequency ladder: the one loud element ---- */
-.ladder{position:relative;width:44px;flex:0 0 44px;align-self:stretch;margin-right:1.1rem}
-.ladder .track{position:absolute;left:21px;top:0;bottom:0;width:1px;background:var(--line)}
-.ladder .band{position:absolute;left:13px;width:17px;background:var(--delft);opacity:.16;
-  border-radius:9px;transition:top .45s cubic-bezier(.4,0,.2,1),height .45s cubic-bezier(.4,0,.2,1)}
-.ladder .now{position:absolute;left:9px;width:25px;height:25px;margin-top:-12px;border-radius:50%;
-  border:2px solid var(--delft);background:var(--paper);transition:top .45s cubic-bezier(.4,0,.2,1)}
-.ladder .tick{position:absolute;left:0;width:44px;font-size:.6rem;color:var(--mute);
-  font-variant-numeric:tabular-nums;text-align:right;padding-right:26px;margin-top:-.45em}
-.ladder .tick::after{content:"";position:absolute;right:18px;top:.45em;width:6px;height:1px;background:var(--line)}
-.testbody{display:flex;flex:1;min-height:0}
-.testmain{flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0}
-
 /* ---- misc ---- */
 .pool{border-top:1px solid var(--line-soft);padding:.6rem 0;display:flex;gap:.75rem;align-items:baseline}
 .pool .nl{font-family:var(--serif);font-size:1.05rem}
@@ -126,7 +113,6 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
 
 <script src="fsrs.js"></script>
 <script src="words.js"></script>
-<script src="testwords.js"></script>
 <script>
 "use strict";
 /* ============================================================
@@ -144,18 +130,12 @@ function makeF(retention){ F = fsrs(generatorParameters({ request_retention: ret
 
 // ---------- Wortliste ----------
 let WORDS = [];         // gelernte Wörter (mit Bedeutung), nach rank sortiert
-let TEST  = [];         // Prüfwortschatz für die Einstufung, Index = Häufigkeitsrang
-function buildTest(){
-  const T = window.TESTWORDS;
-  const authored = new Map(WORDS.map(w=>[w.nl,w]));
-  TEST = T.w.map((nl,i)=>({ nl, idx:i, rank:i+1, gap:T.g[i], word:authored.get(nl)||null }));
-}
 function buildWords(st){
   const base = window.WORDS.map(w => ({...w}));
   const custom = (st.custom||[]).map(w => ({...w, custom:true}));
   WORDS = base.concat(custom).sort((a,b)=>a.rank-b.rank);
   WORDS.forEach((w,i)=>{ w.idx = i; if(w.key===undefined) w.key = w.nl; });
-  buildTest(); buildGloss();
+  buildGloss();
 }
 const byKey = k => WORDS.find(w=>w.key===k);
 // Mehrere niederländische Wörter können dieselbe deutsche Bedeutung haben.
@@ -173,7 +153,7 @@ function buildGloss(){
 // ---------- State ----------
 const todayStr = () => new Date().toISOString().slice(0,10);
 function freshState(){
-  return { v:1, placement:null, cards:{}, known:[], queue:[], custom:[], wanted:[], lastExport:null,
+  return { v:1, cards:{}, known:[], custom:[], lastExport:null,
            settings:{ sessionSize:20, newPerDay:8, retention:0.90 },
            daily:{ date:todayStr(), newDone:0 }, history:[] };
 }
@@ -259,7 +239,7 @@ function dueList(){
 let view = "home", ctx = {};
 function go(v, c={}){ view=v; ctx=c; render(); window.scrollTo(0,0); }
 function render(){
-  const fns = { home:Home, test:Test, testDone:TestDone, session:Session, sessionDone:SessionDone,
+  const fns = { home:Home, session:Session, sessionDone:SessionDone,
                 pool:Pool, add:AddWord, data:Data };
   app.innerHTML = "";
   const node = fns[view]();
@@ -280,24 +260,15 @@ function header(title, right, back){
    HOME
    ============================================================ */
 function backupAge(){
-  if(!S.placement || !Object.keys(S.cards).length) return null;
-  const since = S.lastExport || S.placement && Date.parse(S.placement.at);
+  if(!Object.keys(S.cards).length) return null;
+  const since = S.lastExport || (S.history[0] && S.history[0].t) || Date.now();
   const days = Math.floor((Date.now() - since)/86400000);
   return days >= 30 ? days : null;
 }
 function Home(){
 
   let body;
-  if(!S.placement){
-    body = `
-      <div class="grow center">
-        <p class="word">Erst testen,<br>dann lernen.</p>
-        <p class="gloss dim">Die Einstufung sucht die Häufigkeitsgrenze, ab der du Wörter nicht
-        mehr sicher kennst. Nur was darüber liegt, kommt in den Lernpool.</p>
-        <p class="meta" style="margin-top:1.2rem">Etwa 35 Wörter, drei bis vier Minuten.</p>
-      </div>
-      <div class="bottom"><button class="btn primary" data-go="test">Einstufung starten</button></div>`;
-  } else {
+  {
     const c = boxCounts(), done = c.kann, all = WORDS.length;
     const bar = BOXES.map(b => {
       const v = c[b.id]; if(!v) return "";
@@ -320,190 +291,11 @@ function Home(){
       </div>`;
   }
   const n = document.createElement("div"); n.className="screen";
-  n.innerHTML = header("Amai", S.placement ? `ab Rang ${S.placement.threshold}` : "") + body;
+  n.innerHTML = header("Amai") + body;
   on(n, "[data-go]", e => {
     const v = e.currentTarget.dataset.go;
-    if(v==="session") startSession();
-    else if(v==="test") startTest();
-    else go(v);
+    if(v==="session") startSession(); else go(v);
   });
-  return n;
-}
-
-/* ============================================================
-   EINSTUFUNG — adaptive Treppe über die Häufigkeitsliste
-   ============================================================ */
-const T = {};
-function startTest(){
-  T.lo = 0; T.hi = TEST.length-1;
-  T.pos = 1500;
-  T.step = Math.max(8, Math.floor(TEST.length/6));
-  T.dir = 0; T.reversals = 0; T.n = 0; T.max = 35; T.min = 18;
-  T.asked = new Set(); T.res = {}; T.pseudoHits = 0; T.pseudoShown = 0;
-  // Kontrollitems an feste Positionen setzen statt zu würfeln: bei einem Test von
-  // 18 Fragen kamen sonst in jedem fünften Durchlauf gar keine vor.
-  T.pseudoAt = new Set([4, 9, 15, 22, 29].map(x => x + Math.floor(Math.random()*2)));
-  T.phase = "ask"; T.item = null; T.verifyAll = false;
-  nextTestItem();
-  go("test");
-}
-function nextTestItem(){
-  // gelegentlich ein erfundenes Wort einstreuen
-  if(T.pseudoAt.has(T.n) && T.pseudoShown < 5){
-    T.pseudoShown++;
-    T.item = { pseudo:true, nl: pick(window.PSEUDO) };
-    T.phase = "ask"; return;
-  }
-  let p = T.pos, tries = 0;
-  while(T.asked.has(p) && tries++ < TEST.length) p = (p+1) % TEST.length;
-  T.pos = p; T.asked.add(p);
-  T.item = { pseudo:false, w: TEST[p] };
-  T.phase = "ask";
-}
-function testAnswer(ans){ // "yes" | "unsure" | "no"
-  const it = T.item;
-  if(it.pseudo){
-    if(ans==="yes"){ T.pseudoHits++; T.verifyAll = true; }
-    T.n++;
-    return finishTestStep(null);
-  }
-  if(ans==="yes"){
-    const need = (T.verifyAll || T.n < 3 || Math.random() < 0.45) && it.w.word;
-    if(need){ T.phase = "verify"; T.item.options = mcOptions(it.w.word); return render(); }
-    return recordTest(true);
-  }
-  return recordTest(false);
-}
-function mcOptions(w){
-  const same = WORDS.filter(x=>x.pos===w.pos && x.key!==w.key);
-  const near = same.sort((a,b)=>Math.abs(a.idx-w.idx)-Math.abs(b.idx-w.idx)).slice(0,40);
-  const d = shuffle(near).slice(0,3).map(x=>x.de);
-  return shuffle([w.de, ...d]);
-}
-function recordTest(known){
-  T.res[T.item.w.nl] = known;
-  T.n++;
-  finishTestStep(known);
-}
-function finishTestStep(known){
-  if(known !== null){
-    const newDir = known ? +1 : -1;
-    if(T.dir !== 0 && newDir !== T.dir){ T.reversals++; T.step = Math.max(3, Math.round(T.step/2)); }
-    T.dir = newDir;
-    T.pos = Math.min(TEST.length-1, Math.max(0, T.pos + newDir*T.step));
-    if(known) T.lo = Math.max(T.lo, T.item.w.idx); else T.hi = Math.min(T.hi, T.item.w.idx);
-  }
-  if(T.n >= T.max) return endTest();
-  if(T.n >= T.min && T.reversals >= 6 && T.step <= 3 && fitThreshold().cost <= 1) return endTest();
-  nextTestItem(); render();
-}
-// Robuste Schwelle: der Schnitt, der am wenigsten Antworten widerspricht.
-// Ein einzelner Ausrutscher verschiebt das Ergebnis damit kaum.
-function fitThreshold(){
-  const byNl = new Map(TEST.map(t=>[t.nl,t]));
-  const obs = Object.keys(T.res).map(k => ({ i: byNl.get(k).idx, known: T.res[k] }))
-                                .sort((a,b)=>a.i-b.i);
-  if(!obs.length) return { cut: Math.floor(TEST.length/2), cost: 0 };
-  const unknownBelow = c => obs.filter(o=>!o.known && o.i <= c).length;
-  const knownAbove   = c => obs.filter(o=> o.known && o.i >  c).length;
-  let best = Infinity, cuts = [];
-  const cands = [-1, ...obs.map(o=>o.i)];
-  for(const c of cands){
-    const k = unknownBelow(c) + knownAbove(c);
-    if(k < best){ best = k; cuts = [c]; } else if(k === best) cuts.push(c);
-  }
-  // Bei Gleichstand die tiefere Grenze wählen: ein Wort zu viel im Pool kostet
-  // einen Tipp auf ✕, ein Wort zu wenig bleibt für immer eine Lücke.
-  return { cut: cuts[0], cost: best };
-}
-function endTest(){
-  const { cut, cost } = fitThreshold();
-  const thr = TEST[Math.min(TEST.length-1, Math.max(0,cut))].rank;
-
-  S.placement = { done:true, at:new Date().toISOString(), cutIdx:cut, threshold:thr,
-                  asked:T.n, pseudoShown:T.pseudoShown, pseudoHits:T.pseudoHits };
-  // Bekanntes ausschliessen, alles darüber in die Warteschlange
-  const knownSet = new Set(WORDS.filter(w => w.rank <= thr && T.res[w.nl] !== false).map(w=>w.key));
-  S.known = [...knownSet];
-  S.queue = WORDS.filter(w => !knownSet.has(w.key)).map(w=>w.key);
-  S.queue.sort((a,b)=>{
-    const af = T.res[a]===false ? 0:1, bf = T.res[b]===false ? 0:1;
-    return af-bf || byKey(a).rank - byKey(b).rank;
-  });
-  // Wörter, die du nicht kennst, für die es noch keine Karte gibt — das ist die
-  // Liste, nach der die nächste Wortcharge geschrieben wird.
-  const have = new Set(WORDS.map(w=>w.nl));
-  S.wanted = TEST.filter(t => t.rank > thr && !have.has(t.nl)).slice(0, 600).map(t=>t.nl);
-  save(); go("testDone");
-}
-function Test(){
-  const it = T.item, n = document.createElement("div"); n.className="screen";
-  const lg = x => Math.log(Math.max(200, x));
-  const lo = lg(1), hi = lg(12000);
-  const pctFor = r => Math.min(100, Math.max(0, (lg(r)-lo)/(hi-lo)*100));
-  const cur = it.pseudo ? pctFor(TEST[T.pos].rank) : pctFor(it.w.rank);
-  const bTop = pctFor(TEST[T.lo].rank), bBot = pctFor(TEST[T.hi].rank);
-  const ticks = [100,500,2000,8000].map(r =>
-    `<span class="tick" style="top:${pctFor(r)}%">${r>=1000?(r/1000)+"k":r}</span>`).join("");
-
-  let mainHtml;
-  if(T.phase === "verify"){
-    mainHtml = `
-      <p class="meta">Kurze Gegenprobe</p>
-      <p class="word${it.w.nl.length>12?" long":""}">${esc(it.w.nl)}</p>
-      <div class="stack" style="margin-top:1.6rem">
-        ${it.options.map(o=>`<button class="btn" data-v="${esc(o)}">${esc(o)}</button>`).join("")}
-      </div>`;
-  } else {
-    mainHtml = `
-      <p class="meta">${(!it.pseudo && it.w.word) ? `${POSNAME[it.w.word.pos]}${it.w.word.art?" · "+it.w.word.art:""}` : ""}&nbsp;</p>
-      <p class="word${(it.pseudo?it.nl:it.w.nl).length>12?" long":""}">${esc(it.pseudo ? it.nl : it.w.nl)}</p>
-      <p class="gloss dim" style="margin-top:.8rem">Kennst du die Bedeutung?</p>`;
-  }
-
-  n.innerHTML =
-    header("Einstufung", `${T.n}/${T.max}`) +
-    `<div class="testbody">
-       <div class="ladder">
-         <div class="track"></div>${ticks}
-         <div class="band" style="top:${Math.min(bTop,bBot)}%;height:${Math.abs(bBot-bTop)}%"></div>
-         <div class="now" style="top:${cur}%"></div>
-       </div>
-       <div class="testmain">${mainHtml}</div>
-     </div>` +
-    (T.phase==="verify" ? `<div class="bottom"></div>` : `
-     <div class="bottom">
-       <button class="btn" data-a="yes">Ja, kenne ich</button>
-       <button class="btn" data-a="unsure">Unsicher</button>
-       <button class="btn" data-a="no">Nein</button>
-     </div>`);
-
-  on(n, "[data-a]", e => testAnswer(e.currentTarget.dataset.a));
-  on(n, "[data-v]", e => recordTest(e.currentTarget.dataset.v === it.w.word.de));
-  return n;
-}
-function TestDone(){
-  const p = S.placement;
-  const n = document.createElement("div"); n.className="screen";
-  const warn = p.pseudoHits > 0
-    ? `<p class="note" style="margin-top:1rem;color:var(--clay)">Du hast bei ${p.pseudoHits} von
-       ${p.pseudoShown} erfundenen Wörtern „ja“ gesagt. Die Grenze liegt also eher etwas zu hoch —
-       im Zweifel lieber ein paar Wörter mehr in den Pool nehmen.</p>` : "";
-  n.innerHTML = header("Einstufung", "fertig") + `
-    <div class="grow center">
-      <p class="word">Rang ${p.threshold}</p>
-      <p class="gloss">Ab hier wird es unsicher.</p>
-      <p class="note" style="margin-top:1.2rem">
-        ${S.known.length} Wörter gelten als bekannt und tauchen nicht mehr auf.
-        ${S.queue.length} stehen in der Warteschlange und kommen nach und nach dazu —
-        in deinem Tempo, ohne Tagesziel.</p>
-      ${warn}
-    </div>
-    <div class="bottom">
-      <button class="btn primary" data-go="session">Erste Runde</button>
-      <button class="btn ghost" data-go="pool">Warteschlange ansehen</button>
-    </div>`;
-  on(n,"[data-go]",e=> e.currentTarget.dataset.go==="session" ? startSession() : go("pool"));
   return n;
 }
 
@@ -531,16 +323,21 @@ function newShare(dueCount){
 // nicht nach zwei Wochen Rang 5000 ansteht.
 function bandTop(){
   const solid = S.known.length + Object.keys(S.cards).filter(k => byKey(k) && S.cards[k].stability >= 10).length;
-  const base = S.placement ? S.placement.threshold : 1200;
-  return base + 500 + solid * 60;
+  // Beginnt bei den 500 häufigsten Wörtern, wächst mit jedem gefestigten Wort.
+  return 500 + solid * 60;
+}
+// Die Warteschlange wird abgeleitet, nicht gespeichert: alles, was weder
+// gekonnt noch im Umlauf ist, nach Häufigkeit geordnet.
+function queued(){
+  const known = new Set(S.known);
+  return WORDS.filter(w => !known.has(w.key) && !S.cards[w.key]).map(w => w.key);
 }
 function nextNew(limit){
-  const avail = S.queue.filter(k => byKey(k) && !S.cards[k]);
-  const inBand = avail.filter(k => byKey(k).rank <= bandTop());
+  const avail = queued(), top = bandTop();
+  const inBand = avail.filter(k => byKey(k).rank <= top);
   return (inBand.length ? inBand : avail).slice(0, limit);
 }
 function startSession(){
-  if(!S.placement){ return startTest(); }
   // Am längsten überfällige zuerst. Ein Rückstand wird nie angezeigt und nie
   // eingefordert — er läuft über die nächsten Runden von selbst ab.
   const due = dueList();
@@ -613,7 +410,6 @@ function grade(rating){
   // Alles, was einmal danebenging, muss dagegen mehrere Abfragen überstehen.
   if(R.isNew && rating === 4 && R.judged && R.judged.verdict === "right"){
     S.known.push(key);
-    S.queue = S.queue.filter(k => k !== key);
     S.triaged = (S.triaged || 0) + 1;
     R.retired = (R.retired || 0) + 1;
     R.answered++; R.right++;
@@ -623,7 +419,7 @@ function grade(rating){
   }
   const prev = S.cards[key] || createEmptyCard(new Date());
   const out = F.repeat(prev, new Date())[rating];
-  if(!S.cards[key]){ S.daily.newDone++; S.queue = S.queue.filter(k=>k!==key); }
+  if(!S.cards[key]) S.daily.newDone++;
   out.card.seenDay = todayStr();
   S.cards[key] = out.card;
   S.history.push({ k:key, r:rating, t:Date.now() });
@@ -710,7 +506,7 @@ function Session(){
   on(n,"[data-quit]", ()=> go(R.answered ? "sessionDone" : "home"));
   on(n,"[data-skip]", ()=>{
     if(!confirm(`„${w.nl}“ dauerhaft als bekannt markieren?`)) return;
-    S.known.push(w.key); delete S.cards[w.key]; S.queue = S.queue.filter(k=>k!==w.key);
+    S.known.push(w.key); delete S.cards[w.key];
     save(); R.i++;
     if(R.i >= R.items.length) return go("sessionDone");
     prepCard(); render();
@@ -769,7 +565,7 @@ function Pool(){
     if(b.id === "neu"){
       // Reihenfolge der Warteschlange, nicht nach Rang — selbst hinzugefügte
       // Wörter stehen vorn und sollen auch vorn auftauchen.
-      const pos = new Map(S.queue.map((k,i)=>[k,i]));
+      const pos = new Map(queued().map((k,i)=>[k,i]));
       const sorted = ks.slice().sort((a,b2)=>
         (pos.has(a)?pos.get(a):1e9)-(pos.has(b2)?pos.get(b2):1e9) || byKey(a).rank-byKey(b2).rank);
       return head + sorted.slice(0,60).map(k=>row(k,"")).join("") +
@@ -787,7 +583,7 @@ function Pool(){
     </div>`;
   on(n,"[data-drop]", e=>{
     const k = e.currentTarget.dataset.drop;
-    S.known.push(k); delete S.cards[k]; S.queue = S.queue.filter(x=>x!==k); save(); render();
+    S.known.push(k); delete S.cards[k]; save(); render();
   });
   on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));
   return n;
@@ -810,8 +606,8 @@ function AddWord(){
         <option value="bn">Adjektiv</option><option value="bw">Adverb</option></select>
       <label for="f-cl">Beispielsatz — Zielwort in geschweifte Klammern</label>
       <textarea id="f-cl" rows="2" placeholder="Ik {aarzelde} even."></textarea>
-      <label for="f-rk">Geschätzter Häufigkeitsrang</label>
-      <input id="f-rk" type="number" inputmode="numeric" value="9000">
+      <label for="f-rk">Häufigkeitsrang — 1 stellt das Wort ganz nach vorn</label>
+      <input id="f-rk" type="number" inputmode="numeric" value="1">
     </div>
     <div class="bottom">
       <button class="btn primary" data-save>Speichern</button>
@@ -824,7 +620,7 @@ function AddWord(){
     const w = { nl, art:g("f-art")||null, de, pos:g("f-pos"), cloze:g("f-cl")||nl,
                 rank:Number(g("f-rk"))||9000, key:nl };
     S.custom.push(w); buildWords(S);
-    S.queue.unshift(nl); S.known = S.known.filter(k=>k!==nl);
+    S.known = S.known.filter(k=>k!==nl);
     save(); go("pool");
   });
   on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));
@@ -866,15 +662,13 @@ function Data(){
         <button class="btn" data-progress>Fortschritt exportieren (CSV)</button>
         <button class="btn" data-export>Sicherung in Dateien speichern</button>
         <button class="btn" data-import>Sicherung einlesen</button>
-        <button class="btn" data-wanted>Wunschliste exportieren</button>
-        <button class="btn" data-retest>Einstufung wiederholen</button>
         <button class="btn" data-reset>Alles zurücksetzen</button>
       </div>
       <input type="file" id="f-imp" accept="application/json" style="display:none">
       <hr>
       <p class="note">${Object.keys(S.cards).length} aktive Karten · ${S.known.length} als bekannt
-      abgelegt · ${S.queue.length} in der Warteschlange · ${S.history.length} Bewertungen
-      insgesamt${S.wanted&&S.wanted.length?` · ${S.wanted.length} Wörter auf der Wunschliste`:""}${S.placement?` · Einstufung vom ${new Date(S.placement.at).toLocaleDateString("de-CH")}`:""}.</p>
+      abgelegt · ${queued().length} in der Warteschlange · ${S.history.length} Bewertungen
+      insgesamt.</p>
     </div>
     <div class="bottom"></div>`;
 
@@ -913,7 +707,7 @@ function Data(){
         new Date(c.due).toISOString().slice(0,10),
         (c.stability||0).toFixed(1),(c.difficulty||0).toFixed(1),c.reps,c.lapses].map(q).join(","));
     });
-    S.queue.filter(k=>byKey(k) && !S.cards[k]).forEach(k=>{
+    queued().forEach(k=>{
       const w = byKey(k);
       rows.push([w.nl,w.art,w.de,POSNAME[w.pos],w.rank,w.prevBE,"wartet","","","","",""].map(q).join(","));
     });
@@ -938,17 +732,8 @@ function Data(){
     };
     rd.readAsText(f);
   }, "change");
-  on(n,"[data-wanted]", ()=>{
-    const list = (S.wanted||[]);
-    if(!list.length){ alert("Noch keine Wunschliste — erst die Einstufung machen."); return; }
-    const blob = new Blob([list.join("\n")], {type:"text/plain"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = `amai-wunschliste-${todayStr()}.txt`;
-    document.body.appendChild(a); a.click(); a.remove();
-  });
-  on(n,"[data-retest]", ()=>{ if(confirm("Die Einstufung neu machen? Der aktuelle Lernstand der Karten bleibt erhalten.")) startTest(); });
   on(n,"[data-reset]", ()=>{
-    if(!confirm("Wirklich alles löschen — Einstufung, Pool und Lernstand?")) return;
+    if(!confirm("Wirklich alles löschen — Pool und Lernstand?")) return;
     localStorage.removeItem(KEY); S = freshState(); makeF(S.settings.retention); buildWords(S); go("home");
   });
   on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));

@@ -45,40 +45,19 @@ umbenannt wird — daran hängt der gesamte Lernstand.
 |---|---|
 | `index.html` | Die ganze App: Oberfläche, Einstufung, Lernlogik |
 | `words.js` | Die gelernten Wörter: deutsche Bedeutung, Wortart, Beispielsatz |
-| `testwords.js` | 12 000 Prüfwörter für die Einstufung, nur Wort und Rang |
 | `fsrs.js` | `ts-fsrs` 5.4.2, für den Browser gebündelt (unverändert) |
 | `sw.js` | Service Worker, hält die App offline verfügbar |
 | `manifest.webmanifest`, `icon-*.png` | Damit iOS es als App behandelt |
 
-## Wie die Einstufung funktioniert
+## Wo es anfängt
 
-Zwei getrennte Listen. **Geprüft** wird gegen `testwords.js`: die 12 000 häufigsten
-Wörter, die in Flandern tatsächlich bekannt sind. Diese Wörter brauchen keine
-Übersetzung, sie werden nur abgefragt — deshalb kann die Liste gross sein.
-**Gelernt** wird nur aus `words.js`, wo jedes Wort eine geschriebene Bedeutung und
-einen Beispielsatz hat.
+Bei Rang 1. Es gibt keinen Einstufungstest — die Abfrage selbst ist der Test.
 
-Der Test läuft als Treppe: bei Rang 1500 losgehen, bei „kenne ich“ zu selteneren
-Wörtern springen, bei „nein“ zurück, und die Schrittweite bei jedem
-Richtungswechsel halbieren.
-
-Zwei Dinge fangen Selbstüberschätzung ab:
-
-- **Gegenprobe.** Auf „ja“ folgt oft eine Multiple-Choice-Frage nach der Bedeutung.
-  Daneben liegen heisst nicht gekannt.
-- **Erfundene Wörter.** Etwa jedes siebte Item ist ein Kunstwort wie *verkwalmen* —
-  lautlich niederländisch, aber nicht existent. Wer da „ja“ sagt, bekommt ab dann
-  jede Behauptung überprüft, und am Ende einen Hinweis.
-
-Die Grenze wird am Schluss nicht aus dem höchsten Treffer abgeleitet, sondern als
-der Schnitt, der den wenigsten Antworten widerspricht. Ein einzelner Ausrutscher
-verschiebt das Ergebnis dadurch kaum. Bleiben die Antworten widersprüchlich,
-verlängert sich der Test von 18 auf bis zu 35 Items.
-
-Getestet gegen simulierte Lernerinnen: ohne Antwortrauschen trifft der Schätzer den
-Zielrang auf wenige Ränge genau (799, 1997, 4996, 8996 für die Ziele 800, 2000, 5000
-und 9000). Bei 15 % zufällig falschen Antworten liegt der Median bei 799, 1996, 4821
-und 9000. Der Test braucht dafür 19 bis 30 Fragen.
+Ein Wort, das du beim ersten Kontakt richtig tippst, wandert sofort nach *Gekonnt*
+und kommt nie wieder. Die ersten paar hundert Wörter sind damit in ein paar Runden
+abgehakt, und im Unterschied zu einem Ja/Nein-Test prüfen sie dabei auch den
+Artikel: gut jedes vierte niederländische Substantiv ist ein *het*-Wort, und ein
+angekreuztes „kenne ich" hätte das nie aufgedeckt.
 
 ## Die fünf Fächer
 
