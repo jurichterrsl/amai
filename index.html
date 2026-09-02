@@ -80,6 +80,10 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .grade b{display:block;font-weight:500;font-size:.95rem}
 .grade small{color:var(--mute);font-size:.72rem;font-variant-numeric:tabular-nums}
 .bottom{padding:1rem 0 1.4rem;display:flex;flex-direction:column;gap:.55rem}
+/* Hinweiszeile und Nebenknopf halten ihren Platz auch dann, wenn sie leer sind —
+   so liegt der Hauptknopf in Frage und Auflösung an derselben Stelle. */
+.bottom .note.pad{margin:0;text-align:center;min-height:1.24em}
+.bottom .ghosted{visibility:hidden;pointer-events:none}
 
 /* ---- misc ---- */
 .pool{border-top:1px solid var(--line-soft);padding:.6rem 0;display:flex;gap:.75rem;align-items:baseline}
@@ -119,7 +123,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v14";        // muss zu CACHE in sw.js passen
+const VERSION = "v16";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -406,6 +410,12 @@ function prepCard(){
   const sched = F.repeat(S.cards[key] || createEmptyCard(new Date()), new Date());
   R.preview = { 1:sched[1].card.due, 2:sched[2].card.due, 3:sched[3].card.due, 4:sched[4].card.due };
 }
+// Ob ein Wort in dieser Runde noch einmal drankommt. Anzeige und Ablauf fragen
+// dieselbe Funktion, sonst behauptet der Bildschirm etwas anderes als passiert.
+const MAX_REPEATS = 1;
+function willRequeue(key, rating){
+  return rating === 1 && ((R.repeats && R.repeats[key]) || 0) < MAX_REPEATS;
+}
 function grade(rating){
   const key = R.key;
   // Wer ein Wort beim allerersten Kontakt auf Anhieb tippt, kennt es. Aussortieren.
@@ -431,7 +441,7 @@ function grade(rating){
   // „Weiss ich nicht" oder eine falsche Antwort. Ein Tippfehler oder ein falscher
   // Artikel zählt als gewusst und kommt erst beim nächsten Termin wieder.
   R.repeats = R.repeats || {};
-  if(rating === 1 && (R.repeats[key]||0) < 1){
+  if(willRequeue(key, rating)){
     R.repeats[key] = (R.repeats[key]||0) + 1;
     R.items.push(key);
   }
@@ -458,6 +468,7 @@ function Session(){
                style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">
       </div>`;
     bottom = `<div class="bottom">
+        <p class="note pad">&nbsp;</p>
         <button class="btn primary" data-check>Prüfen</button>
         <button class="btn ghost" data-idk>Weiss ich nicht</button>
       </div>`;
@@ -487,12 +498,13 @@ function Session(){
         ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>` : ""}
       </div>`;
     bottom = `<div class="bottom">
-        <p class="note" style="margin:0 0 .3rem;text-align:center">${
+        <p class="note pad">${
           retires ? "Gekonnt — kommt nicht mehr"
-          : rating === 1 ? "Kommt in dieser Runde noch einmal"
+          : willRequeue(R.key, rating) ? "Kommt in dieser Runde noch einmal"
           : (R.preview[rating] - Date.now()) < 86400000 ? "Morgen wieder"
           : "Wieder in " + fmtDue(R.preview[rating])}</p>
         <button class="btn primary" data-g="${rating}">Weiter</button>
+        <button class="btn ghost ghosted" aria-hidden="true" tabindex="-1">&nbsp;</button>
       </div>`;
   }
 
