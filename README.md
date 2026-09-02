@@ -20,17 +20,23 @@ das Löschen der Website-Daten. Deshalb: unter *Daten* ab und zu exportieren.
 | Datei | Zweck |
 |---|---|
 | `index.html` | Die ganze App: Oberfläche, Einstufung, Lernlogik |
-| `words.js` | 256 Wörter mit deutscher Bedeutung, Wortart und Beispielsatz |
+| `words.js` | Die gelernten Wörter: deutsche Bedeutung, Wortart, Beispielsatz |
+| `testwords.js` | 12 000 Prüfwörter für die Einstufung, nur Wort und Rang |
 | `fsrs.js` | `ts-fsrs` 5.4.2, für den Browser gebündelt (unverändert) |
 | `sw.js` | Service Worker, hält die App offline verfügbar |
 | `manifest.webmanifest`, `icon-*.png` | Damit iOS es als App behandelt |
 
 ## Wie die Einstufung funktioniert
 
-Die Wörter sind nach Häufigkeitsrang sortiert (aus dem OpenSubtitles-Korpus,
-`hermitdave/FrequencyWords`, Liste `nl_50k`). Der Test läuft als Treppe: bei etwa
-Rang 2500 losgehen, bei „kenne ich“ zu selteneren Wörtern springen, bei „nein“
-zurück, und die Schrittweite bei jedem Richtungswechsel halbieren.
+Zwei getrennte Listen. **Geprüft** wird gegen `testwords.js`: die 12 000 häufigsten
+Wörter, die in Flandern tatsächlich bekannt sind. Diese Wörter brauchen keine
+Übersetzung, sie werden nur abgefragt — deshalb kann die Liste gross sein.
+**Gelernt** wird nur aus `words.js`, wo jedes Wort eine geschriebene Bedeutung und
+einen Beispielsatz hat.
+
+Der Test läuft als Treppe: bei Rang 1500 losgehen, bei „kenne ich“ zu selteneren
+Wörtern springen, bei „nein“ zurück, und die Schrittweite bei jedem
+Richtungswechsel halbieren.
 
 Zwei Dinge fangen Selbstüberschätzung ab:
 
@@ -46,9 +52,13 @@ verschiebt das Ergebnis dadurch kaum. Bleiben die Antworten widersprüchlich,
 verlängert sich der Test von 18 auf bis zu 35 Items.
 
 Getestet gegen simulierte Lernerinnen: ohne Antwortrauschen trifft der Schätzer den
-Zielrang exakt, bei 15 % zufällig falschen Antworten liegt der Median bei Rang 1500,
-4000 und 9000 weiterhin auf dem Ziel. Oberhalb von Rang 20000 wird es unzuverlässig —
-dort enthält die Liste schlicht zu wenige Wörter.
+Zielrang auf wenige Ränge genau (799, 1997, 4996, 8996 für die Ziele 800, 2000, 5000
+und 9000). Bei 15 % zufällig falschen Antworten liegt der Median bei 799, 1996, 4821
+und 9000. Der Test braucht dafür 19 bis 30 Fragen.
+
+Was du nicht kennst und wofür es noch keine Karte gibt, landet auf einer Wunschliste.
+Unter *Daten* lässt sie sich exportieren — das ist die Vorlage für die nächste
+Wortcharge.
 
 ## Kartentypen
 
@@ -91,10 +101,17 @@ Nach jeder Änderung an den Dateien die Versionsnummer in `sw.js` erhöhen
 
 ## Herkunft der Daten
 
-Häufigkeitsränge: OpenSubtitles-2018-Wortformen aus `hermitdave/FrequencyWords`
-(CC-BY-SA 4.0). Es sind Wortform-Ränge, keine Lemma-Ränge — die Infinitivform eines
-Verbs steht deshalb tiefer in der Liste, als das Lemma insgesamt vorkommt. Für die
-grobe Sortierung nach Schwierigkeit reicht das.
+Ränge und Bekanntheitswerte: Dutch Crowdsourcing Project (Brysbaert, Keuleers &
+Mandera 2019, https://osf.io/5fk8d/). 54 000 Wörter, rund 300 000 Teilnehmende, mit
+getrennten Werten für Belgien und die Niederlande. Der Rang ist die Position nach
+SUBTLEX-NL-Häufigkeit unter den Wörtern mit `prevalence_BE >= 1.4` — also unter dem,
+was Flamen wirklich kennen. Das Feld `gap` ist die Differenz Belgien minus
+Niederlande: hohe Werte markieren flämisch-spezifische Wörter.
+
+Eine Einschränkung dazu: Bekanntheit misst Wiedererkennen, nicht Sprachgebrauch. Die
+Daten finden Wörter, die ausserhalb Flanderns *unbekannt* sind, nicht Wörter, die in
+Flandern *bevorzugt* werden. Wer in Amsterdam `jurk` sagt, versteht `kleedje`
+trotzdem.
 
 Die deutschen Bedeutungen und Beispielsätze sind von Hand geschrieben, nicht aus einem
 Wörterbuch übernommen. Bei Wörtern mit mehreren Bedeutungen steht die häufigste

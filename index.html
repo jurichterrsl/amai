@@ -117,6 +117,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
 
 <script src="fsrs.js"></script>
 <script src="words.js"></script>
+<script src="testwords.js"></script>
 <script>
 "use strict";
 /* ============================================================
@@ -132,19 +133,26 @@ let F = null;
 function makeF(retention){ F = fsrs(generatorParameters({ request_retention: retention, enable_fuzz: true })); }
 
 // ---------- Wortliste ----------
-let WORDS = [];         // nach rank sortiert, id === index
+let WORDS = [];         // gelernte Wörter (mit Bedeutung), nach rank sortiert
+let TEST  = [];         // Prüfwortschatz für die Einstufung, Index = Häufigkeitsrang
+function buildTest(){
+  const T = window.TESTWORDS;
+  const authored = new Map(WORDS.map(w=>[w.nl,w]));
+  TEST = T.w.map((nl,i)=>({ nl, idx:i, rank:i+1, gap:T.g[i], word:authored.get(nl)||null }));
+}
 function buildWords(st){
   const base = window.WORDS.map(w => ({...w}));
   const custom = (st.custom||[]).map(w => ({...w, custom:true}));
   WORDS = base.concat(custom).sort((a,b)=>a.rank-b.rank);
   WORDS.forEach((w,i)=>{ w.idx = i; if(w.key===undefined) w.key = w.nl; });
+  buildTest();
 }
 const byKey = k => WORDS.find(w=>w.key===k);
 
 // ---------- State ----------
 const todayStr = () => new Date().toISOString().slice(0,10);
 function freshState(){
-  return { v:1, placement:null, cards:{}, known:[], queue:[], custom:[],
+  return { v:1, placement:null, cards:{}, known:[], queue:[], custom:[], wanted:[],
            settings:{ sessionSize:20, newPerDay:8, retention:0.90 },
            daily:{ date:todayStr(), newDone:0 }, history:[] };
 }
@@ -279,9 +287,9 @@ function Home(){
    ============================================================ */
 const T = {};
 function startTest(){
-  T.lo = 0; T.hi = WORDS.length-1;
-  T.pos = WORDS.findIndex(w=>w.rank>=2500); if(T.pos<0) T.pos = Math.floor(WORDS.length/2);
-  T.step = Math.max(8, Math.floor(WORDS.length/6));
+  T.lo = 0; T.hi = TEST.length-1;
+  T.pos = 1500;
+  T.step = Math.max(8, Math.floor(TEST.length/6));
   T.dir = 0; T.reversals = 0; T.n = 0; T.max = 35; T.min = 18;
   T.asked = new Set(); T.res = {}; T.pseudoHits = 0; T.pseudoShown = 0;
   T.phase = "ask"; T.item = null; T.verifyAll = false;
@@ -296,9 +304,9 @@ function nextTestItem(){
     T.phase = "ask"; return;
   }
   let p = T.pos, tries = 0;
-  while(T.asked.has(p) && tries++ < WORDS.length) p = (p+1) % WORDS.length;
+  while(T.asked.has(p) && tries++ < TEST.length) p = (p+1) % TEST.length;
   T.pos = p; T.asked.add(p);
-  T.item = { pseudo:false, w: WORDS[p] };
+  T.item = { pseudo:false, w: TEST[p] };
   T.phase = "ask";
 }
 function testAnswer(ans){ // "yes" | "unsure" | "no"
@@ -309,8 +317,8 @@ function testAnswer(ans){ // "yes" | "unsure" | "no"
     return finishTestStep(null);
   }
   if(ans==="yes"){
-    const need = T.verifyAll || T.n < 3 || Math.random() < 0.45;
-    if(need){ T.phase = "verify"; T.item.options = mcOptions(it.w); return render(); }
+    const need = (T.verifyAll || T.n < 3 || Math.random() < 0.45) && it.w.word;
+    if(need){ T.phase = "verify"; T.item.options = mcOptions(it.w.word); return render(); }
     return recordTest(true);
   }
   return recordTest(false);
@@ -322,7 +330,7 @@ function mcOptions(w){
   return shuffle([w.de, ...d]);
 }
 function recordTest(known){
-  T.res[T.item.w.key] = known;
+  T.res[T.item.w.nl] = known;
   T.n++;
   finishTestStep(known);
 }
@@ -331,7 +339,7 @@ function finishTestStep(known){
     const newDir = known ? +1 : -1;
     if(T.dir !== 0 && newDir !== T.dir){ T.reversals++; T.step = Math.max(3, Math.round(T.step/2)); }
     T.dir = newDir;
-    T.pos = Math.min(WORDS.length-1, Math.max(0, T.pos + newDir*T.step));
+    T.pos = Math.min(TEST.length-1, Math.max(0, T.pos + newDir*T.step));
     if(known) T.lo = Math.max(T.lo, T.item.w.idx); else T.hi = Math.min(T.hi, T.item.w.idx);
   }
   if(T.n >= T.max) return endTest();
@@ -341,9 +349,10 @@ function finishTestStep(known){
 // Robuste Schwelle: der Schnitt, der am wenigsten Antworten widerspricht.
 // Ein einzelner Ausrutscher verschiebt das Ergebnis damit kaum.
 function fitThreshold(){
-  const obs = Object.keys(T.res).map(k => ({ i: byKey(k).idx, known: T.res[k] }))
+  const byNl = new Map(TEST.map(t=>[t.nl,t]));
+  const obs = Object.keys(T.res).map(k => ({ i: byNl.get(k).idx, known: T.res[k] }))
                                 .sort((a,b)=>a.i-b.i);
-  if(!obs.length) return { cut: Math.floor(WORDS.length/2), cost: 0 };
+  if(!obs.length) return { cut: Math.floor(TEST.length/2), cost: 0 };
   const unknownBelow = c => obs.filter(o=>!o.known && o.i <= c).length;
   const knownAbove   = c => obs.filter(o=> o.known && o.i >  c).length;
   let best = Infinity, cuts = [];
@@ -358,28 +367,32 @@ function fitThreshold(){
 }
 function endTest(){
   const { cut, cost } = fitThreshold();
-  const thr = WORDS[Math.min(WORDS.length-1, Math.max(0,cut))].rank;
+  const thr = TEST[Math.min(TEST.length-1, Math.max(0,cut))].rank;
 
   S.placement = { done:true, at:new Date().toISOString(), cutIdx:cut, threshold:thr,
                   asked:T.n, pseudoShown:T.pseudoShown, pseudoHits:T.pseudoHits };
   // Bekanntes ausschliessen, alles darüber in die Warteschlange
-  S.known = WORDS.filter(w => w.idx <= cut && T.res[w.key] !== false).map(w=>w.key);
-  S.queue = WORDS.filter(w => !S.known.includes(w.key)).map(w=>w.key);
-  // Explizit gescheiterte Wörter unter der Grenze zuerst
+  const knownSet = new Set(WORDS.filter(w => w.rank <= thr && T.res[w.nl] !== false).map(w=>w.key));
+  S.known = [...knownSet];
+  S.queue = WORDS.filter(w => !knownSet.has(w.key)).map(w=>w.key);
   S.queue.sort((a,b)=>{
     const af = T.res[a]===false ? 0:1, bf = T.res[b]===false ? 0:1;
-    return af-bf || byKey(a).idx - byKey(b).idx;
+    return af-bf || byKey(a).rank - byKey(b).rank;
   });
+  // Wörter, die du nicht kennst, für die es noch keine Karte gibt — das ist die
+  // Liste, nach der die nächste Wortcharge geschrieben wird.
+  const have = new Set(WORDS.map(w=>w.nl));
+  S.wanted = TEST.filter(t => t.rank > thr && !have.has(t.nl)).slice(0, 600).map(t=>t.nl);
   save(); go("testDone");
 }
 function Test(){
   const it = T.item, n = document.createElement("div"); n.className="screen";
   const lg = x => Math.log(Math.max(200, x));
-  const lo = lg(200), hi = lg(50000);
+  const lo = lg(1), hi = lg(12000);
   const pctFor = r => Math.min(100, Math.max(0, (lg(r)-lo)/(hi-lo)*100));
-  const cur = it.pseudo ? pctFor(WORDS[T.pos].rank) : pctFor(it.w.rank);
-  const bTop = pctFor(WORDS[T.lo].rank), bBot = pctFor(WORDS[T.hi].rank);
-  const ticks = [500,2000,8000,30000].map(r =>
+  const cur = it.pseudo ? pctFor(TEST[T.pos].rank) : pctFor(it.w.rank);
+  const bTop = pctFor(TEST[T.lo].rank), bBot = pctFor(TEST[T.hi].rank);
+  const ticks = [100,500,2000,8000].map(r =>
     `<span class="tick" style="top:${pctFor(r)}%">${r>=1000?(r/1000)+"k":r}</span>`).join("");
 
   let mainHtml;
@@ -392,7 +405,7 @@ function Test(){
       </div>`;
   } else {
     mainHtml = `
-      <p class="meta">${it.pseudo?"":`${POSNAME[it.w.pos]}${it.w.art?" · "+it.w.art:""}`}&nbsp;</p>
+      <p class="meta">${(!it.pseudo && it.w.word) ? `${POSNAME[it.w.word.pos]}${it.w.word.art?" · "+it.w.word.art:""}` : ""}&nbsp;</p>
       <p class="word${(it.pseudo?it.nl:it.w.nl).length>12?" long":""}">${esc(it.pseudo ? it.nl : it.w.nl)}</p>
       <p class="gloss dim" style="margin-top:.8rem">Kennst du die Bedeutung?</p>`;
   }
@@ -415,7 +428,7 @@ function Test(){
      </div>`);
 
   on(n, "[data-a]", e => testAnswer(e.currentTarget.dataset.a));
-  on(n, "[data-v]", e => recordTest(e.currentTarget.dataset.v === it.w.de));
+  on(n, "[data-v]", e => recordTest(e.currentTarget.dataset.v === it.w.word.de));
   return n;
 }
 function TestDone(){
@@ -678,6 +691,7 @@ function Data(){
       <div class="stack" style="margin-top:.7rem">
         <button class="btn" data-export>Sicherung exportieren</button>
         <button class="btn" data-import>Sicherung einlesen</button>
+        <button class="btn" data-wanted>Wunschliste exportieren</button>
         <button class="btn" data-retest>Einstufung wiederholen</button>
         <button class="btn" data-reset>Alles zurücksetzen</button>
       </div>
@@ -685,7 +699,7 @@ function Data(){
       <hr>
       <p class="note">${Object.keys(S.cards).length} aktive Karten · ${S.known.length} als bekannt
       abgelegt · ${S.queue.length} in der Warteschlange · ${S.history.length} Bewertungen
-      insgesamt${S.placement?` · Einstufung vom ${new Date(S.placement.at).toLocaleDateString("de-CH")}`:""}.</p>
+      insgesamt${S.wanted&&S.wanted.length?` · ${S.wanted.length} Wörter auf der Wunschliste`:""}${S.placement?` · Einstufung vom ${new Date(S.placement.at).toLocaleDateString("de-CH")}`:""}.</p>
     </div>
     <div class="bottom"><button class="btn ghost" data-go="home">Zurück</button></div>`;
 
@@ -714,6 +728,14 @@ function Data(){
     };
     rd.readAsText(f);
   }, "change");
+  on(n,"[data-wanted]", ()=>{
+    const list = (S.wanted||[]);
+    if(!list.length){ alert("Noch keine Wunschliste — erst die Einstufung machen."); return; }
+    const blob = new Blob([list.join("\n")], {type:"text/plain"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `woordje-wunschliste-${todayStr()}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+  });
   on(n,"[data-retest]", ()=>{ if(confirm("Die Einstufung neu machen? Der aktuelle Lernstand der Karten bleibt erhalten.")) startTest(); });
   on(n,"[data-reset]", ()=>{
     if(!confirm("Wirklich alles löschen — Einstufung, Pool und Lernstand?")) return;
