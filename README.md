@@ -1,4 +1,4 @@
-# Woordje — Niederländisch B1/B2
+# Amai — Flämisch B1/B2
 
 Ein Einstufungstest, der die Häufigkeitsgrenze deines Wortschatzes sucht, plus
 Wiederholung nach FSRS für alles, was darüber liegt. Läuft offline als PWA auf dem iPhone.
@@ -11,9 +11,29 @@ Wiederholung nach FSRS für alles, was darüber liegt. Läuft offline als PWA au
 2. Die Seite in **Safari** öffnen. Chrome auf iOS kann nicht auf den Homescreen installieren.
 3. Teilen-Symbol → *Zum Home-Bildschirm*.
 
-Danach startet die App im Vollbild, ohne Safari-Leiste, und funktioniert offline.
-Der Lernstand liegt in `localStorage` und überlebt normales Schliessen — aber nicht
-das Löschen der Website-Daten. Deshalb: unter *Daten* ab und zu exportieren.
+Schritt 3 ist nicht optional. Als Lesezeichen in Safari fällt die App unter die
+Sieben-Tage-Regel der Intelligent Tracking Prevention und verliert nach einer Woche
+ohne Besuch ihren gesamten Speicher. Web-Apps auf dem Home-Bildschirm sind davon
+ausdrücklich ausgenommen und laufen in einem eigenen, von Safari getrennten
+Datenbereich.
+
+## Wie sicher ist der Lernstand
+
+Alles liegt in `localStorage` auf dem Telefon. Nichts wird hochgeladen — auch wer die
+Seite öffnet, sieht nur eine leere App.
+
+Geschützt gegen: Safaris Sieben-Tage-Aufräumung, normales Schliessen, Neustart.
+Beim Start fordert die App zusätzlich dauerhaften Speicher an
+(`navigator.storage.persist`), was auf unterstützenden Systemen vor der automatischen
+Räumung schützt. Der aktuelle Status steht unter *Daten*.
+
+Nicht geschützt gegen: das Löschen des Icons vom Home-Bildschirm, einen vollen
+Telefonspeicher (WebKit räumt dann pro Origin und immer vollständig) und den Wechsel
+auf ein neues Gerät. Deshalb: unter *Daten* exportieren. Nach 30 Tagen ohne Sicherung
+erinnert die Startseite daran.
+
+Der Speicherschlüssel heisst `amai.v1` und sollte so bleiben, auch wenn die App
+umbenannt wird — daran hängt der gesamte Lernstand.
 
 ## Dateien
 
@@ -60,16 +80,37 @@ Was du nicht kennst und wofür es noch keine Karte gibt, landet auf einer Wunsch
 Unter *Daten* lässt sie sich exportieren — das ist die Vorlage für die nächste
 Wortcharge.
 
-## Kartentypen
+## Wie eine Karte abläuft
 
-- **Erkennen** — niederländisches Wort, Bedeutung aufdecken, selbst bewerten.
-  Für neue und junge Karten.
-- **Lückentext** — Satz mit Lücke, vier Wörter derselben Wortart zur Auswahl.
-  Kommt dazu, sobald die Stabilität einer Karte etwa eine Woche übersteigt.
-  Erst wiedererkennen, dann im Kontext produzieren.
+**Neues Wort** — wird einmal vollständig gezeigt: niederländisches Wort, Artikel,
+deutsche Bedeutung, Beispielsatz. Nichts zu tippen. Ein Tipp auf *Weiter* setzt es
+auf „nochmal in einer Minute“, sodass es in derselben Runde als richtige Abfrage
+zurückkommt.
 
-Bewertet wird mit den vier FSRS-Stufen; unter jeder steht, wann das Wort dann
-wiederkommt.
+**Abfrage** — die deutsche Bedeutung steht oben, darunter der Beispielsatz mit
+Lücke, darunter ein Eingabefeld. Du tippst das niederländische Wort. Keine
+Auswahlknöpfe.
+
+Geurteilt wird in vier Stufen:
+
+| Eingabe | Urteil |
+|---|---|
+| genau richtig | **Richtig** |
+| ein Zeichen daneben | **Fast — achte auf die Schreibweise** |
+| richtig, falscher Artikel | **Richtig, aber es heisst het/de** |
+| ein anderes Wort aus der Liste | **Das ist „…“** mit dessen Bedeutung |
+
+Gross- und Kleinschreibung, Satzzeichen und überzählige Leerzeichen werden
+ignoriert. Den Artikel darfst du mitschreiben, musst du aber nicht.
+
+*Weiss ich nicht* zeigt die Lösung sofort. Das Wort bleibt im Pool und kommt in
+derselben Runde noch einmal.
+
+Danach bewertest du mit den vier FSRS-Stufen; unter jeder steht, wann das Wort
+wiederkommt. Die Tastatur reicht: Enter prüft, Enter bestätigt.
+
+Karten, die auf „in wenigen Minuten“ gesetzt werden, hängt die Runde hinten wieder
+an — höchstens zweimal pro Wort, damit eine Runde nicht endlos wird.
 
 ## Wörter ergänzen
 
@@ -90,11 +131,14 @@ Lückentext verschwindet — bei trennbaren Verben beide Teile, etwa
 auftaucht; eine grobe Schätzung genügt.
 
 Nach jeder Änderung an den Dateien die Versionsnummer in `sw.js` erhöhen
-(`woordje-v1` → `woordje-v2`), sonst serviert der Cache weiter die alte Fassung.
+(`amai-v1` → `amai-v2`), sonst serviert der Cache weiter die alte Fassung.
 
 ## Was hier nicht drin ist
 
 - Keine Aussprache, kein Audio.
+- Keine Alternativantworten: Wenn zwei niederländische Wörter dieselbe deutsche
+  Bedeutung haben, zählt nur das hinterlegte. Der Beispielsatz mit Lücke soll das
+  eingrenzen, trifft aber nicht immer.
 - Keine Serien, keine Erinnerungen, keine Push-Nachrichten. Wenn du drei Tage nicht
   reinschaust, passiert nichts — FSRS holt das von selbst wieder auf.
 - Kein Sync zwischen Geräten. Export und Import sind der Weg.

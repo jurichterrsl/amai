@@ -1,4 +1,4 @@
-// Woordje — Wortliste. Ränge aus dem Dutch Crowdsourcing Project (Brysbaert, Keuleers,
+// Amai — Wortliste. Ränge aus dem Dutch Crowdsourcing Project (Brysbaert, Keuleers,
 // Mandera 2019, https://osf.io/5fk8d/): Position nach SUBTLEX-NL-Zipf unter den Wörtern
 // mit prevalence_BE >= 1.4, also unter dem, was Flamen tatsächlich kennen.
 // prevBE = Bekanntheit in Flandern (z, gesättigt bei 1.96). gap = BE minus NL:

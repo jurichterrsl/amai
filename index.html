@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<title>Woordje</title>
+<title>Amai</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#EDF0F2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14181C" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Woordje">
+<meta name="apple-mobile-web-app-title" content="Amai">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{
@@ -121,10 +121,11 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
 <script>
 "use strict";
 /* ============================================================
-   Woordje — Niederländisch B1/B2
+   Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const KEY = "woordje.v1";
+const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
+let PERSIST = "unbekannt";
 const app = document.getElementById("app");
 
 // ---------- FSRS ----------
@@ -152,7 +153,7 @@ const byKey = k => WORDS.find(w=>w.key===k);
 // ---------- State ----------
 const todayStr = () => new Date().toISOString().slice(0,10);
 function freshState(){
-  return { v:1, placement:null, cards:{}, known:[], queue:[], custom:[], wanted:[],
+  return { v:1, placement:null, cards:{}, known:[], queue:[], custom:[], wanted:[], lastExport:null,
            settings:{ sessionSize:20, newPerDay:8, retention:0.90 },
            daily:{ date:todayStr(), newDone:0 }, history:[] };
 }
@@ -225,6 +226,12 @@ function header(title, right){
 /* ============================================================
    HOME
    ============================================================ */
+function backupAge(){
+  if(!S.placement || !Object.keys(S.cards).length) return null;
+  const since = S.lastExport || S.placement && Date.parse(S.placement.at);
+  const days = Math.floor((Date.now() - since)/86400000);
+  return days >= 30 ? days : null;
+}
 function Home(){
   const due = dueList();
   const pool = Object.keys(S.cards).length;
@@ -266,6 +273,8 @@ function Home(){
         </p>
       </div>
       <div class="bottom">
+        ${backupAge() ? `<p class="note" style="margin:0 0 .3rem">Letzte Sicherung vor ${backupAge()} Tagen.
+          <button class="link" data-go="data" style="padding:0">Jetzt sichern</button></p>`:""}
         <button class="btn primary" data-go="session">Loslegen</button>
         <div class="row">
           <button class="btn ghost" data-go="pool">Pool</button>
@@ -274,7 +283,7 @@ function Home(){
       </div>`;
   }
   const n = document.createElement("div"); n.className="screen";
-  n.innerHTML = header("Woordje", S.placement ? `Grenze ≈ Rang ${S.placement.threshold}` : "") + body;
+  n.innerHTML = header("Amai", S.placement ? `Grenze ≈ Rang ${S.placement.threshold}` : "") + body;
   on(n, "[data-go]", e => {
     const v = e.currentTarget.dataset.go;
     if(v==="session") startSession(); else if(v==="test") startTest(); else go(v);
@@ -467,27 +476,49 @@ function startSession(){
   const fresh = S.queue.filter(k=>byKey(k) && !S.cards[k]).slice(0, newLeft);
   R.items = shuffle(due.slice(0, S.settings.sessionSize)).concat(fresh)
               .slice(0, S.settings.sessionSize + fresh.length);
-  R.i = 0; R.answered = 0; R.right = 0; R.newIntroduced = 0;
+  R.i = 0; R.answered = 0; R.right = 0; R.newIntroduced = 0; R.repeats = {};
   if(!R.items.length) return go("home");
   prepCard(); go("session");
 }
-// Kartentyp: Erkennen für neue/junge Karten, Lückentext sobald die Stabilität trägt
+// Kartentyp: ein neues Wort wird erst gezeigt, danach immer aktiv abgefragt.
 function cardMode(key){
-  const c = S.cards[key], w = byKey(key);
-  if(!w.cloze || !/\{/.test(w.cloze)) return "recall";
-  if(!c || c.state === State.New) return "recall";
-  if(c.stability >= 7 || c.reps >= 3) return Math.random() < 0.7 ? "cloze" : "recall";
-  return Math.random() < 0.25 ? "cloze" : "recall";
+  const c = S.cards[key];
+  return (!c || c.state === State.New) ? "intro" : "produce";
+}
+// Tippfehler von Wissenslücken trennen: Levenshtein-Distanz 1 gilt als Schreibfehler.
+function lev(a,b){
+  if(Math.abs(a.length-b.length) > 2) return 9;
+  const m=a.length, n=b.length; let prev=[...Array(n+1).keys()], cur=new Array(n+1);
+  for(let i=1;i<=m;i++){
+    cur[0]=i;
+    for(let j=1;j<=n;j++)
+      cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1] + (a[i-1]===b[j-1]?0:1));
+    [prev,cur]=[cur,prev];
+  }
+  return prev[n];
+}
+// Satzzeichen zuerst entfernen, dann Leerraum — sonst bleibt ein Rest-Leerzeichen
+// stehen und eine richtige Antwort wird als Tippfehler gewertet.
+const norm = s => (s||"").toLowerCase().replace(/[.,!?;:"']/g," ").replace(/\s+/g," ").trim();
+// Artikel darf mitgetippt werden; er wird getrennt geprüft.
+function splitArticle(s){
+  const m = /^(de|het)\s+(.+)$/.exec(s);
+  return m ? { art:m[1], word:m[2] } : { art:null, word:s };
+}
+function judge(input, w){
+  const got = splitArticle(norm(input)), want = norm(w.nl);
+  if(!got.word) return { verdict:"empty" };
+  const artWrong = got.art && w.art && got.art !== w.art;
+  if(got.word === want) return { verdict: artWrong ? "article" : "right" };
+  if(lev(got.word, want) === 1) return { verdict:"typo" };
+  const other = WORDS.find(x => norm(x.nl) === got.word);
+  return { verdict:"wrong", other };
 }
 function prepCard(){
   const key = R.items[R.i], w = byKey(key);
-  R.key = key; R.w = w; R.mode = cardMode(key); R.revealed = false; R.chosen = null;
+  R.key = key; R.w = w; R.mode = cardMode(key);
+  R.phase = "ask"; R.typed = ""; R.judged = null;
   R.isNew = !S.cards[key];
-  if(R.mode === "cloze"){
-    const same = WORDS.filter(x=>x.pos===w.pos && x.key!==w.key);
-    const near = same.sort((a,b)=>Math.abs(a.idx-w.idx)-Math.abs(b.idx-w.idx)).slice(0,40);
-    R.options = shuffle([w, ...shuffle(near).slice(0,3)]);
-  }
   const sched = F.repeat(S.cards[key] || createEmptyCard(new Date()), new Date());
   R.preview = { 1:sched[1].card.due, 2:sched[2].card.due, 3:sched[3].card.due, 4:sched[4].card.due };
 }
@@ -499,7 +530,11 @@ function grade(rating){
   S.cards[key] = out.card;
   S.history.push({ k:key, r:rating, t:Date.now() });
   if(S.history.length > 4000) S.history = S.history.slice(-3000);
-  R.answered++; if(rating >= 3) R.right++;
+  if(R.mode === "produce"){ R.answered++; if(rating >= 3) R.right++; }
+  // Was noch in dieser Runde fällig wird, kommt in dieser Runde zurück.
+  const backIn = (out.card.due - Date.now())/60000;
+  R.repeats = R.repeats || {};
+  if(backIn < 12 && (R.repeats[key]||0) < 2){ R.repeats[key] = (R.repeats[key]||0)+1; R.items.push(key); }
   save();
   R.i++;
   if(R.i >= R.items.length) return go("sessionDone");
@@ -510,7 +545,6 @@ function Session(){
   const prog = Math.round(R.i / R.items.length * 100);
   const head = header("Runde", `${R.i+1}/${R.items.length}`) +
     `<div class="bar"><i style="width:${prog}%"></i></div>`;
-
   const grades = `
     <div class="row">
       <button class="grade" data-g="1"><b>Nochmal</b><small>${fmtDue(R.preview[1])}</small></button>
@@ -518,54 +552,71 @@ function Session(){
       <button class="grade" data-g="3"><b>Gut</b><small>${fmtDue(R.preview[3])}</small></button>
       <button class="grade" data-g="4"><b>Leicht</b><small>${fmtDue(R.preview[4])}</small></button>
     </div>`;
-
+  const artLine = w.art ? `<span class="art">${w.art} </span>` : "";
   let body, bottom;
-  if(R.mode === "recall"){
+
+  if(R.mode === "intro"){
     body = `
       <div class="grow center">
-        <p class="meta">${POSNAME[w.pos]}${R.isNew?' <span class="tag">neu</span>':""}</p>
-        <p class="word${w.nl.length>12?" long":""}">${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}</p>
-        ${R.revealed ? `
-          <p class="gloss">${esc(w.de)}</p>
-          <p class="sentence dim" style="margin-top:1.4rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>
-        ` : `<p class="gloss dim">&nbsp;</p>`}
+        <p class="meta">Neues Wort · ${POSNAME[w.pos]}</p>
+        <p class="word${w.nl.length>12?" long":""}">${artLine}${esc(w.nl)}</p>
+        <p class="gloss">${esc(w.de)}</p>
+        <p class="sentence dim" style="margin-top:1.4rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>
+        <p class="note" style="margin-top:1rem">Kommt gleich noch einmal — dann zum Tippen.</p>
       </div>`;
-    bottom = R.revealed ? `<div class="bottom">${grades}</div>`
-      : `<div class="bottom"><button class="btn primary" data-reveal>Bedeutung zeigen</button></div>`;
+    bottom = `<div class="bottom"><button class="btn primary" data-g="1">Weiter</button></div>`;
+
+  } else if(R.phase === "ask"){
+    body = `
+      <div class="grow center">
+        <p class="meta">${POSNAME[w.pos]}${w.art?" · de oder het":""} — auf Niederländisch?</p>
+        <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
+        <p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>
+        <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
+               spellcheck="false" lang="nl" enterkeyhint="go" placeholder="tippen…"
+               style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">
+      </div>`;
+    bottom = `<div class="bottom">
+        <button class="btn primary" data-check>Prüfen</button>
+        <button class="btn ghost" data-idk>Weiss ich nicht</button>
+      </div>`;
+
   } else {
-    const shown = R.chosen === null;
+    const v = R.judged.verdict;
+    const colour = v==="right" ? "var(--moss)" : v==="typo"||v==="article" ? "var(--delft)" : "var(--clay)";
+    const verdictText = {
+      right:  "Richtig.",
+      typo:   "Fast — achte auf die Schreibweise.",
+      article: `Richtig, aber es heisst <b>${w.art}</b>.`,
+      wrong:  R.judged.other ? `Das ist „${esc(R.judged.other.de)}“.` : "Nicht ganz.",
+      idk:    "",
+      empty:  ""
+    }[v] || "";
     body = `
       <div class="grow center">
-        <p class="meta">Welches Wort passt?</p>
-        <p class="sentence">${esc(blanks(w.cloze))}</p>
-        ${shown ? `
-          <div class="stack" style="margin-top:1.6rem">
-            ${R.options.map(o=>`<button class="btn" data-c="${esc(o.key)}">${esc(o.nl)}</button>`).join("")}
-          </div>` : `
-          <div class="stack" style="margin-top:1.6rem">
-            ${R.options.map(o=>{
-              const cls = o.key===w.key ? "btn correct" : (o.key===R.chosen ? "btn wrong" : "btn");
-              return `<div class="${cls}" style="cursor:default">${esc(o.nl)}${o.key===w.key?` <span class="dim" style="font-size:.85rem">— ${esc(o.de)}</span>`:""}</div>`;
-            }).join("")}
-          </div>
-          <p class="sentence" style="margin-top:1.3rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>`}
+        <p class="meta" style="color:${colour}">${verdictText || "&nbsp;"}</p>
+        <p class="word${w.nl.length>12?" long":""}">${artLine}${esc(w.nl)}</p>
+        <p class="gloss dim">${esc(w.de)}</p>
+        ${R.typed && v!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(R.typed)}</p>` : ""}
+        <p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>
       </div>`;
-    bottom = shown ? `<div class="bottom"><button class="btn ghost" data-c="__idk">Weiss ich nicht</button></div>`
-                   : `<div class="bottom">${grades}</div>`;
+    bottom = `<div class="bottom">${grades}</div>`;
   }
 
   n.innerHTML = head + body + bottom +
     `<div style="padding-bottom:1rem"><button class="link" data-quit>Runde beenden</button>
       <button class="link" data-skip style="float:right">Wort ist mir bekannt</button></div>`;
 
-  on(n,"[data-reveal]", ()=>{ R.revealed = true; render(); });
+  const check = () => {
+    const el = n.querySelector("#ans");
+    R.typed = el ? el.value : "";
+    R.judged = judge(R.typed, w);
+    if(R.judged.verdict === "empty") return;
+    R.phase = "shown"; render();
+  };
+  on(n,"[data-check]", check);
+  on(n,"[data-idk]", ()=>{ R.typed=""; R.judged={verdict:"idk"}; R.phase="shown"; render(); });
   on(n,"[data-g]", e=> grade(Number(e.currentTarget.dataset.g)));
-  on(n,"[data-c]", e=>{
-    const v = e.currentTarget.dataset.c;
-    R.chosen = v === "__idk" ? "" : v;
-    R.correct = R.chosen === w.key;
-    render();
-  });
   on(n,"[data-quit]", ()=> go(R.answered ? "sessionDone" : "home"));
   on(n,"[data-skip]", ()=>{
     if(!confirm(`„${w.nl}“ dauerhaft als bekannt markieren?`)) return;
@@ -574,6 +625,22 @@ function Session(){
     if(R.i >= R.items.length) return go("sessionDone");
     prepCard(); render();
   });
+
+  // Tastatur führt durch die Runde: Enter prüft, Enter bestätigt.
+  const inp = n.querySelector("#ans");
+  if(inp){
+    inp.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); check(); } });
+    setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 30);
+  } else {
+    n.addEventListener("keydown", e => {
+      if(e.key !== "Enter") return;
+      e.preventDefault();
+      if(R.mode === "intro") return grade(1);
+      const v = R.judged && R.judged.verdict;
+      grade(v === "right" ? 3 : v === "typo" || v === "article" ? 2 : 1);
+    });
+    setTimeout(()=>{ try{ n.querySelector("[data-g]").focus(); }catch(e){} }, 30);
+  }
   return n;
 }
 function SessionDone(){
@@ -686,10 +753,18 @@ function Data(){
       <p class="note" style="margin-top:.4rem">Höher heisst häufiger wiederholen. 0.90 ist der Normalfall.</p>
       <button class="btn" data-apply style="margin-top:.9rem">Übernehmen</button>
       <hr>
-      <p class="note">Alles liegt nur auf diesem Gerät. Exportiere ab und zu — ein gelöschter
-      Safari-Speicher nimmt sonst den Lernstand mit.</p>
+      <p class="note">CSV ist zum Anschauen — jedes Wort mit Status und nächstem Termin,
+      öffnet sich in Numbers oder Excel. JSON ist die Sicherung, mit der sich der Lernstand
+      wiederherstellen lässt.</p>
+      <p class="note">Alles liegt nur auf diesem Gerät. Als Web-App auf dem Home-Bildschirm ist
+      der Lernstand vor Safaris Sieben-Tage-Aufräumung geschützt, aber nicht davor, dass das
+      Icon gelöscht wird, der Speicher des Telefons vollläuft oder du auf ein neues Gerät
+      wechselst. Speicherstatus: ${PERSIST}.
+      ${S.lastExport ? `Letzte Sicherung: ${new Date(S.lastExport).toLocaleDateString("de-CH")}.`
+                     : "Noch nie gesichert."}</p>
       <div class="stack" style="margin-top:.7rem">
-        <button class="btn" data-export>Sicherung exportieren</button>
+        <button class="btn" data-progress>Fortschritt exportieren (CSV)</button>
+        <button class="btn" data-export>Sicherung exportieren (JSON)</button>
         <button class="btn" data-import>Sicherung einlesen</button>
         <button class="btn" data-wanted>Wunschliste exportieren</button>
         <button class="btn" data-retest>Einstufung wiederholen</button>
@@ -713,7 +788,32 @@ function Data(){
     const blob = new Blob([JSON.stringify(S)], {type:"application/json"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `woordje-${todayStr()}.json`;
+    a.download = `amai-sicherung-${todayStr()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    S.lastExport = Date.now(); save(); render();
+  });
+  on(n,"[data-progress]", ()=>{
+    const q = v => `"${String(v==null?"":v).replace(/"/g,'""')}"`;
+    const rows = [["wort","artikel","deutsch","wortart","rang","prevBE","status","faellig",
+                   "stabilitaet_tage","schwierigkeit","wiederholungen","rueckfaelle"].join(",")];
+    const ST = {0:"neu",1:"lernen",2:"im Umlauf",3:"auffrischen"};
+    Object.keys(S.cards).filter(byKey).sort((a,b)=>S.cards[a].due-S.cards[b].due).forEach(k=>{
+      const w = byKey(k), c = S.cards[k];
+      rows.push([w.nl,w.art,w.de,POSNAME[w.pos],w.rank,w.prevBE,ST[c.state]||c.state,
+        new Date(c.due).toISOString().slice(0,10),
+        (c.stability||0).toFixed(1),(c.difficulty||0).toFixed(1),c.reps,c.lapses].map(q).join(","));
+    });
+    S.queue.filter(k=>byKey(k) && !S.cards[k]).forEach(k=>{
+      const w = byKey(k);
+      rows.push([w.nl,w.art,w.de,POSNAME[w.pos],w.rank,w.prevBE,"wartet","","","","",""].map(q).join(","));
+    });
+    S.known.filter(byKey).forEach(k=>{
+      const w = byKey(k);
+      rows.push([w.nl,w.art,w.de,POSNAME[w.pos],w.rank,w.prevBE,"bekannt","","","","",""].map(q).join(","));
+    });
+    const blob = new Blob(["\uFEFF"+rows.join("\n")], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `amai-fortschritt-${todayStr()}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
   });
   on(n,"[data-import]", ()=> n.querySelector("#f-imp").click());
@@ -733,7 +833,7 @@ function Data(){
     if(!list.length){ alert("Noch keine Wunschliste — erst die Einstufung machen."); return; }
     const blob = new Blob([list.join("\n")], {type:"text/plain"});
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = `woordje-wunschliste-${todayStr()}.txt`;
+    a.href = URL.createObjectURL(blob); a.download = `amai-wunschliste-${todayStr()}.txt`;
     document.body.appendChild(a); a.click(); a.remove();
   });
   on(n,"[data-retest]", ()=>{ if(confirm("Die Einstufung neu machen? Der aktuelle Lernstand der Karten bleibt erhalten.")) startTest(); });
@@ -750,6 +850,12 @@ function Data(){
    ============================================================ */
 load();
 render();
+// Bittet das System, diese Daten von der automatischen Aufräumung auszunehmen.
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persisted().then(p => p || navigator.storage.persist())
+    .then(ok => { PERSIST = ok ? "gesichert" : "nicht gesichert"; })
+    .catch(()=>{});
+}
 if("serviceWorker" in navigator){
   window.addEventListener("load", ()=> navigator.serviceWorker.register("sw.js").catch(()=>{}));
 }

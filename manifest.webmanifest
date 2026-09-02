@@ -1,7 +1,7 @@
 {
-  "name": "Woordje — Niederländisch",
-  "short_name": "Woordje",
-  "description": "Einstufungstest und Wiederholung für niederländischen B1/B2-Wortschatz.",
+  "name": "Amai — Flämisch lernen",
+  "short_name": "Amai",
+  "description": "Einstufungstest und Wiederholung für flämischen B1/B2-Wortschatz.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
