@@ -54,6 +54,10 @@ h1{font-family:var(--serif);font-weight:600;font-size:1.5rem;letter-spacing:-.01
 /* ---- header ---- */
 header{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;
   padding:1.1rem 0 .9rem;border-bottom:1px solid var(--line-soft)}
+.htitle{display:flex;align-items:baseline;gap:.5rem;min-width:0}
+.back{font-size:1.6rem;line-height:1;color:var(--delft);padding:0 .3rem 0 0;
+  margin-left:-.3rem;align-self:center}
+.back:focus-visible{outline:2px solid var(--delft);outline-offset:2px;border-radius:4px}
 header .n{font-variant-numeric:tabular-nums;font-size:.82rem;color:var(--mute)}
 
 /* ---- buttons ---- */
@@ -201,10 +205,20 @@ function fmtDue(d){
   if(days < 365) return Math.round(days/30.4) + " Mon.";
   return (days/365).toFixed(1) + " J.";
 }
+function endOfDay(){ const d = new Date(); d.setHours(23,59,59,999); return d.getTime(); }
+// Alles, was heute noch dran wäre, zählt zu heute — und jedes Wort nur einmal
+// pro Tag, damit die Runde ein Ende hat.
 function dueList(){
-  const now = Date.now();
-  return Object.keys(S.cards).filter(k => byKey(k) && S.cards[k].due <= now)
+  const cut = endOfDay(), today = todayStr();
+  return Object.keys(S.cards)
+    .filter(k => byKey(k) && S.cards[k].due <= cut && S.cards[k].seenDay !== today)
     .sort((a,b)=> S.cards[a].due - S.cards[b].due);
+}
+// Für "trotzdem üben": das, was als Nächstes ansteht, vorgezogen. Bewusst ohne
+// die Einmal-pro-Tag-Regel — wer freiwillig weitermacht, soll das können.
+function upcoming(limit){
+  return Object.keys(S.cards).filter(byKey)
+    .sort((a,b)=> S.cards[a].due - S.cards[b].due).slice(0, limit);
 }
 
 // ---------- Routing ----------
@@ -214,13 +228,18 @@ function render(){
   const fns = { home:Home, test:Test, testDone:TestDone, session:Session, sessionDone:SessionDone,
                 pool:Pool, add:AddWord, data:Data };
   app.innerHTML = "";
-  app.appendChild(fns[view]());
+  const node = fns[view]();
+  on(node, "[data-back]", ()=> go(BACKTO[view] || "home"));
+  app.appendChild(node);
 }
+const BACKTO = { pool:"home", data:"home", add:"pool" };
 function el(html){ const t=document.createElement("template"); t.innerHTML=html.trim(); return t.content.firstElementChild; }
 function on(root, sel, fn, ev="click"){ root.querySelectorAll(sel).forEach(n=>n.addEventListener(ev, fn)); }
 
-function header(title, right){
-  return `<header><h1>${esc(title)}</h1><span class="n">${right||""}</span></header>`;
+function header(title, right, back){
+  return `<header>
+    <span class="htitle">${back?`<button class="back" data-back aria-label="Zurück">&#8249;</button>`:""}<h1>${esc(title)}</h1></span>
+    <span class="n">${right||""}</span></header>`;
 }
 
 /* ============================================================
@@ -236,8 +255,9 @@ function Home(){
   const due = dueList();
   const pool = Object.keys(S.cards).length;
   const queued = S.queue.filter(k=>byKey(k)).length;
-  const newLeft = Math.max(0, S.settings.newPerDay - S.daily.newDone);
-  const canNew = Math.min(newLeft, queued);
+  const allow = newAllowance();
+  const newLeft = Math.max(0, allow - S.daily.newDone);
+  const canNew = Math.min(newLeft, nextNew(newLeft).length);
   const total = due.length + canNew;
 
   let body;
@@ -251,16 +271,19 @@ function Home(){
       </div>
       <div class="bottom"><button class="btn primary" data-go="test">Einstufung starten</button></div>`;
   } else if(total === 0){
-    const next = Object.keys(S.cards).map(k=>S.cards[k].due).sort((a,b)=>a-b)[0];
+    const more = upcoming(1).length;
     body = `
       <div class="grow center">
-        <p class="done">Nichts fällig.</p>
-        <p class="gloss dim">${next ? "Das nächste Wort in " + fmtDue(next) : "Der Pool ist leer."}</p>
-        ${queued&&!newLeft ? `<p class="meta" style="margin-top:1rem">Tageslimit für neue Wörter erreicht. ${queued} warten.</p>`:""}
+        <p class="done">Für heute erledigt.</p>
+        <p class="gloss dim">${pool ? "Morgen geht es weiter." : "Der Pool ist leer."}</p>
+        ${queued&&!newLeft ? `<p class="meta" style="margin-top:1rem">Heutige Menge an neuen Wörtern ist durch. ${queued} warten.</p>`:""}
       </div>
       <div class="bottom">
-        <button class="btn ghost" data-go="pool">Pool ansehen</button>
-        <button class="btn ghost" data-go="data">Daten &amp; Einstellungen</button>
+        ${more ? `<button class="btn ghost" data-go="extra">Trotzdem üben</button>`:""}
+        <div class="row">
+          <button class="btn ghost" data-go="pool">Pool</button>
+          <button class="btn ghost" data-go="data">Daten</button>
+        </div>
       </div>`;
   } else {
     body = `
@@ -269,7 +292,7 @@ function Home(){
         <p class="gloss">${total===1?"Wort wartet":"Wörter warten"}.</p>
         <p class="meta" style="margin-top:1.4rem">
           ${due.length} zur Wiederholung${canNew?` · ${canNew} neu`:""} ·
-          ${pool} im Pool${queued?` · ${queued} in der Warteschlange`:""}
+          ${pool} im Pool${queued?` · ${queued} wartet`:""}
         </p>
       </div>
       <div class="bottom">
@@ -286,7 +309,10 @@ function Home(){
   n.innerHTML = header("Amai", S.placement ? `Grenze ≈ Rang ${S.placement.threshold}` : "") + body;
   on(n, "[data-go]", e => {
     const v = e.currentTarget.dataset.go;
-    if(v==="session") startSession(); else if(v==="test") startTest(); else go(v);
+    if(v==="session") startSession();
+    else if(v==="extra") startSession(true);
+    else if(v==="test") startTest();
+    else go(v);
   });
   return n;
 }
@@ -469,21 +495,43 @@ function TestDone(){
    LERNRUNDE
    ============================================================ */
 const R = {};
-function startSession(){
+// Wie viele neue Wörter heute vertretbar sind. Läuft es schlecht, kommen weniger
+// dazu; läuft es gut, ein paar mehr.
+function newAllowance(){
+  const base = S.settings.newPerDay;
+  const recent = S.history.slice(-40);
+  if(recent.length < 15) return base;
+  const hit = recent.filter(h => h.r >= 3).length / recent.length;
+  if(hit < 0.65) return Math.max(1, Math.round(base * 0.3));
+  if(hit < 0.80) return Math.max(1, Math.round(base * 0.6));
+  if(hit > 0.92) return Math.round(base * 1.4);
+  return base;
+}
+// Neue Wörter kommen nur aus einem Fenster oberhalb deiner Grenze. Das Fenster
+// wächst mit jeder Karte, die es in den Langzeitrhythmus geschafft hat — damit
+// nicht nach zwei Wochen Rang 5000 ansteht.
+function bandTop(){
+  const solid = Object.keys(S.cards).filter(k => byKey(k) && S.cards[k].state === State.Review).length;
+  const base = S.placement ? S.placement.threshold : 1200;
+  return base + 500 + solid * 60;
+}
+function nextNew(limit){
+  const avail = S.queue.filter(k => byKey(k) && !S.cards[k]);
+  const inBand = avail.filter(k => byKey(k).rank <= bandTop());
+  return (inBand.length ? inBand : avail).slice(0, limit);
+}
+function startSession(extra){
   if(!S.placement){ return startTest(); }
   const due = dueList();
-  const newLeft = Math.max(0, S.settings.newPerDay - S.daily.newDone);
-  const fresh = S.queue.filter(k=>byKey(k) && !S.cards[k]).slice(0, newLeft);
-  R.items = shuffle(due.slice(0, S.settings.sessionSize)).concat(fresh)
+  // Zusatzrunden ziehen nur Wiederholungen vor. Neue Wörter bleiben beim Tagesmass,
+  // sonst wäre die Bremse gegen zu viel Schweres auf einmal wirkungslos.
+  const fresh = extra ? [] : nextNew(Math.max(0, newAllowance() - S.daily.newDone));
+  const base = extra ? upcoming(S.settings.sessionSize) : due;
+  R.items = shuffle(base.slice(0, S.settings.sessionSize)).concat(fresh)
               .slice(0, S.settings.sessionSize + fresh.length);
   R.i = 0; R.answered = 0; R.right = 0; R.newIntroduced = 0; R.repeats = {};
   if(!R.items.length) return go("home");
   prepCard(); go("session");
-}
-// Kartentyp: ein neues Wort wird erst gezeigt, danach immer aktiv abgefragt.
-function cardMode(key){
-  const c = S.cards[key];
-  return (!c || c.state === State.New) ? "intro" : "produce";
 }
 // Tippfehler von Wissenslücken trennen: Levenshtein-Distanz 1 gilt als Schreibfehler.
 function lev(a,b){
@@ -505,6 +553,15 @@ function splitArticle(s){
   const m = /^(de|het)\s+(.+)$/.exec(s);
   return m ? { art:m[1], word:m[2] } : { art:null, word:s };
 }
+// Die Bewertung leitet sich aus der Antwort ab, nicht aus einer Selbsteinschätzung.
+// Richtig und flott = Leicht, richtig aber zäh = Schwer, Schreibfehler = Schwer,
+// falsch oder nicht gewusst = Nochmal.
+function autoRating(verdict, ms, w){
+  if(verdict === "wrong" || verdict === "idk" || verdict === "empty") return 1;
+  if(verdict === "typo" || verdict === "article") return 2;
+  const budget = 4000 + w.nl.length * 400;   // Lesen, überlegen, tippen
+  return ms < budget ? 4 : ms < budget * 2.5 ? 3 : 2;
+}
 function judge(input, w){
   const got = splitArticle(norm(input)), want = norm(w.nl);
   if(!got.word) return { verdict:"empty" };
@@ -516,8 +573,8 @@ function judge(input, w){
 }
 function prepCard(){
   const key = R.items[R.i], w = byKey(key);
-  R.key = key; R.w = w; R.mode = cardMode(key);
-  R.phase = "ask"; R.typed = ""; R.judged = null;
+  R.key = key; R.w = w; R.mode = "produce";
+  R.phase = "ask"; R.typed = ""; R.judged = null; R.shownAt = Date.now();
   R.isNew = !S.cards[key];
   const sched = F.repeat(S.cards[key] || createEmptyCard(new Date()), new Date());
   R.preview = { 1:sched[1].card.due, 2:sched[2].card.due, 3:sched[3].card.due, 4:sched[4].card.due };
@@ -527,10 +584,11 @@ function grade(rating){
   const prev = S.cards[key] || createEmptyCard(new Date());
   const out = F.repeat(prev, new Date())[rating];
   if(!S.cards[key]){ S.daily.newDone++; R.newIntroduced++; S.queue = S.queue.filter(k=>k!==key); }
+  out.card.seenDay = todayStr();
   S.cards[key] = out.card;
   S.history.push({ k:key, r:rating, t:Date.now() });
   if(S.history.length > 4000) S.history = S.history.slice(-3000);
-  if(R.mode === "produce"){ R.answered++; if(rating >= 3) R.right++; }
+  R.answered++; if(rating >= 3) R.right++;
   // Was noch in dieser Runde fällig wird, kommt in dieser Runde zurück.
   const backIn = (out.card.due - Date.now())/60000;
   R.repeats = R.repeats || {};
@@ -545,31 +603,13 @@ function Session(){
   const prog = Math.round(R.i / R.items.length * 100);
   const head = header("Runde", `${R.i+1}/${R.items.length}`) +
     `<div class="bar"><i style="width:${prog}%"></i></div>`;
-  const grades = `
-    <div class="row">
-      <button class="grade" data-g="1"><b>Nochmal</b><small>${fmtDue(R.preview[1])}</small></button>
-      <button class="grade" data-g="2"><b>Schwer</b><small>${fmtDue(R.preview[2])}</small></button>
-      <button class="grade" data-g="3"><b>Gut</b><small>${fmtDue(R.preview[3])}</small></button>
-      <button class="grade" data-g="4"><b>Leicht</b><small>${fmtDue(R.preview[4])}</small></button>
-    </div>`;
   const artLine = w.art ? `<span class="art">${w.art} </span>` : "";
   let body, bottom;
 
-  if(R.mode === "intro"){
+  if(R.phase === "ask"){
     body = `
       <div class="grow center">
-        <p class="meta">Neues Wort · ${POSNAME[w.pos]}</p>
-        <p class="word${w.nl.length>12?" long":""}">${artLine}${esc(w.nl)}</p>
-        <p class="gloss">${esc(w.de)}</p>
-        <p class="sentence dim" style="margin-top:1.4rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>
-        <p class="note" style="margin-top:1rem">Kommt gleich noch einmal — dann zum Tippen.</p>
-      </div>`;
-    bottom = `<div class="bottom"><button class="btn primary" data-g="1">Weiter</button></div>`;
-
-  } else if(R.phase === "ask"){
-    body = `
-      <div class="grow center">
-        <p class="meta">${POSNAME[w.pos]}${w.art?" · de oder het":""} — auf Niederländisch?</p>
+        <p class="meta">${POSNAME[w.pos]}${w.art?" · de oder het":""} — auf Niederländisch?${R.isNew?' <span class="tag">neu</span>':""}</p>
         <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
         <p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>
         <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
@@ -583,6 +623,7 @@ function Session(){
 
   } else {
     const v = R.judged.verdict;
+    const rating = autoRating(v, R.elapsed, w);
     const colour = v==="right" ? "var(--moss)" : v==="typo"||v==="article" ? "var(--delft)" : "var(--clay)";
     const verdictText = {
       right:  "Richtig.",
@@ -600,7 +641,12 @@ function Session(){
         ${R.typed && v!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(R.typed)}</p>` : ""}
         <p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>
       </div>`;
-    bottom = `<div class="bottom">${grades}</div>`;
+    bottom = `<div class="bottom">
+        <p class="note" style="margin:0 0 .3rem;text-align:center">${
+          (R.preview[rating]-Date.now()) < 86400000 ? "Kommt in dieser Runde noch einmal"
+          : "Wieder in " + fmtDue(R.preview[rating])}</p>
+        <button class="btn primary" data-g="${rating}">Weiter</button>
+      </div>`;
   }
 
   n.innerHTML = head + body + bottom +
@@ -610,12 +656,13 @@ function Session(){
   const check = () => {
     const el = n.querySelector("#ans");
     R.typed = el ? el.value : "";
+    R.elapsed = Date.now() - (R.shownAt || Date.now());
     R.judged = judge(R.typed, w);
     if(R.judged.verdict === "empty") return;
     R.phase = "shown"; render();
   };
   on(n,"[data-check]", check);
-  on(n,"[data-idk]", ()=>{ R.typed=""; R.judged={verdict:"idk"}; R.phase="shown"; render(); });
+  on(n,"[data-idk]", ()=>{ R.typed=""; R.elapsed = 1e9; R.judged={verdict:"idk"}; R.phase="shown"; render(); });
   on(n,"[data-g]", e=> grade(Number(e.currentTarget.dataset.g)));
   on(n,"[data-quit]", ()=> go(R.answered ? "sessionDone" : "home"));
   on(n,"[data-skip]", ()=>{
@@ -635,9 +682,7 @@ function Session(){
     n.addEventListener("keydown", e => {
       if(e.key !== "Enter") return;
       e.preventDefault();
-      if(R.mode === "intro") return grade(1);
-      const v = R.judged && R.judged.verdict;
-      grade(v === "right" ? 3 : v === "typo" || v === "article" ? 2 : 1);
+      grade(autoRating(R.judged && R.judged.verdict, R.elapsed, R.w));
     });
     setTimeout(()=>{ try{ n.querySelector("[data-g]").focus(); }catch(e){} }, 30);
   }
@@ -648,13 +693,13 @@ function SessionDone(){
   const pct = R.answered ? Math.round(R.right/R.answered*100) : 0;
   n.innerHTML = header("Runde", "fertig") + `
     <div class="grow center">
-      <p class="done">Fertig für jetzt.</p>
+      <p class="done">Fertig für heute.</p>
       <p class="gloss dim">${R.answered} Karten, ${pct} % auf Anhieb gewusst${R.newIntroduced?`, ${R.newIntroduced} neu dazu`:""}.</p>
       <p class="note" style="margin-top:1.4rem">Der Rest kommt von allein wieder.</p>
     </div>
     <div class="bottom">
       <button class="btn ghost" data-go="home">Schliessen</button>
-      ${dueList().length ? `<button class="btn primary" data-go="more">Noch eine Runde</button>`:""}
+      ${dueList().length ? `<button class="btn primary" data-go="more">Weiter</button>`:""}
     </div>`;
   on(n,"[data-go]", e=> e.currentTarget.dataset.go==="more" ? startSession() : go("home"));
   return n;
@@ -674,7 +719,7 @@ function Pool(){
       <span class="de">${esc(w.de)}</span><span class="meta" style="width:4.2rem;text-align:right">${right}</span>
       <button class="link" data-drop="${esc(k)}" style="padding:0">✕</button></div>`;
   };
-  n.innerHTML = header("Pool", `${active.length} aktiv`) + `
+  n.innerHTML = header("Pool", `${active.length} aktiv`, true) + `
     <div class="scroll">
       <p class="note" style="margin:.9rem 0">Im Umlauf. ✕ markiert ein Wort dauerhaft als bekannt.</p>
       ${active.map(k=>row(k, fmtDue(S.cards[k].due))).join("") || `<p class="note">Noch nichts.</p>`}
@@ -684,10 +729,7 @@ function Pool(){
       ${queued.length>150?`<p class="note">… und ${queued.length-150} weitere.</p>`:""}
     </div>
     <div class="bottom">
-      <div class="row">
-        <button class="btn ghost" data-go="add">Wort hinzufügen</button>
-        <button class="btn ghost" data-go="home">Zurück</button>
-      </div>
+      <button class="btn ghost" data-go="add">Wort hinzufügen</button>
     </div>`;
   on(n,"[data-drop]", e=>{
     const k = e.currentTarget.dataset.drop;
@@ -702,7 +744,7 @@ function Pool(){
    ============================================================ */
 function AddWord(){
   const n = document.createElement("div"); n.className="screen";
-  n.innerHTML = header("Wort hinzufügen") + `
+  n.innerHTML = header("Wort hinzufügen", "", true) + `
     <div class="scroll">
       <p class="note" style="margin:.9rem 0">Für Wörter, die dir im Alltag begegnen. Sie landen sofort im Pool.</p>
       <label for="f-nl">Niederländisch</label><input id="f-nl" autocapitalize="none" autocorrect="off">
@@ -719,7 +761,6 @@ function AddWord(){
     </div>
     <div class="bottom">
       <button class="btn primary" data-save>Speichern</button>
-      <button class="btn ghost" data-go="pool">Abbrechen</button>
     </div>`;
   on(n,"[data-save]", ()=>{
     const g = id => n.querySelector("#"+id).value.trim();
@@ -742,12 +783,16 @@ function AddWord(){
 function Data(){
   const n = document.createElement("div"); n.className="screen";
   const s = S.settings;
-  n.innerHTML = header("Daten &amp; Einstellungen") + `
+  n.innerHTML = header("Daten &amp; Einstellungen", "", true) + `
     <div class="scroll">
       <label for="s-size">Karten pro Runde</label>
       <input id="s-size" type="number" inputmode="numeric" min="5" max="100" value="${s.sessionSize}">
-      <label for="s-new">Neue Wörter pro Tag</label>
+      <label for="s-new">Neue Wörter pro Tag (Richtwert)</label>
       <input id="s-new" type="number" inputmode="numeric" min="0" max="40" value="${s.newPerDay}">
+      <p class="note" style="margin-top:.4rem">Die App weicht davon ab: bei vielen Fehlern
+      kommen weniger neue Wörter, bei einer hohen Trefferquote ein paar mehr.
+      Aktuell: ${newAllowance()} pro Tag. Neue Wörter kommen bis Rang ${bandTop()};
+      diese Grenze wächst mit jeder gefestigten Karte.</p>
       <label for="s-ret">Zielgenauigkeit (FSRS, 0.80–0.97)</label>
       <input id="s-ret" type="number" step="0.01" min="0.8" max="0.97" value="${s.retention}">
       <p class="note" style="margin-top:.4rem">Höher heisst häufiger wiederholen. 0.90 ist der Normalfall.</p>
@@ -776,7 +821,7 @@ function Data(){
       abgelegt · ${S.queue.length} in der Warteschlange · ${S.history.length} Bewertungen
       insgesamt${S.wanted&&S.wanted.length?` · ${S.wanted.length} Wörter auf der Wunschliste`:""}${S.placement?` · Einstufung vom ${new Date(S.placement.at).toLocaleDateString("de-CH")}`:""}.</p>
     </div>
-    <div class="bottom"><button class="btn ghost" data-go="home">Zurück</button></div>`;
+    <div class="bottom"></div>`;
 
   on(n,"[data-apply]", ()=>{
     s.sessionSize = Math.max(5, Number(n.querySelector("#s-size").value)||20);

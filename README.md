@@ -76,20 +76,53 @@ Zielrang auf wenige Ränge genau (799, 1997, 4996, 8996 für die Ziele 800, 2000
 und 9000). Bei 15 % zufällig falschen Antworten liegt der Median bei 799, 1996, 4821
 und 9000. Der Test braucht dafür 19 bis 30 Fragen.
 
+## Tagesrhythmus
+
+Die App ist auf einmal am Tag ausgelegt. Fällig ist alles, was bis heute Abend
+dran wäre, und jedes Wort kommt höchstens einmal pro Tag — innerhalb einer Runde
+darf es sich wiederholen, danach ist es für heute durch. Deshalb steht kein
+Countdown auf der Startseite: entweder ist etwas fällig, oder es heisst
+*Für heute erledigt*.
+
+Wer trotzdem weitermachen will, drückt *Trotzdem üben*. Das zieht Wiederholungen
+vor, bringt aber keine zusätzlichen neuen Wörter — sonst wäre die Bremse unten
+wirkungslos.
+
+## Tempo
+
+Zwei Bremsen sorgen dafür, dass nicht zu viel Schweres auf einmal kommt.
+
+**Die Tagesmenge passt sich an.** Der Richtwert steht in den Einstellungen, aber die
+App weicht davon ab: Liegt die Trefferquote der letzten 40 Abfragen unter 65 %,
+kommen nur noch 30 % davon dazu; unter 80 % sind es 60 %; über 92 % gibt es 40 %
+mehr.
+
+**Neue Wörter kommen aus einem Fenster.** Es beginnt 500 Ränge über deiner Grenze
+und wächst um 60 Ränge pro Karte, die es in den Langzeitrhythmus geschafft hat.
+Ohne dieses Fenster stünde nach zwei Wochen Rang 3000 an, egal wie es läuft.
+
+Zehn simulierte Tage ab Grenze 500, je nach Trefferquote:
+
+| Trefferquote | neue Wörter pro Tag | nach 10 Tagen |
+|---|---|---|
+| 90 % | 8 → 11 | 86 Wörter, bis Rang 1958 |
+| 75 % | schwankt 5–8 | 62 Wörter, bis Rang 1677 |
+| 50 % | fällt auf 2 | 32 Wörter, bis Rang 1501 |
+
 Was du nicht kennst und wofür es noch keine Karte gibt, landet auf einer Wunschliste.
 Unter *Daten* lässt sie sich exportieren — das ist die Vorlage für die nächste
 Wortcharge.
 
 ## Wie eine Karte abläuft
 
-**Neues Wort** — wird einmal vollständig gezeigt: niederländisches Wort, Artikel,
-deutsche Bedeutung, Beispielsatz. Nichts zu tippen. Ein Tipp auf *Weiter* setzt es
-auf „nochmal in einer Minute“, sodass es in derselben Runde als richtige Abfrage
-zurückkommt.
+**Jedes Wort beginnt als Abfrage — auch beim allerersten Mal.** Die deutsche
+Bedeutung steht oben, darunter der Beispielsatz mit Lücke, darunter ein
+Eingabefeld. Nichts wird vorher vorgezeigt.
 
-**Abfrage** — die deutsche Bedeutung steht oben, darunter der Beispielsatz mit
-Lücke, darunter ein Eingabefeld. Du tippst das niederländische Wort. Keine
-Auswahlknöpfe.
+Das ist Absicht: ein Rateversuch vor der Auflösung verankert ein Wort besser als
+blosses Anschauen, auch wenn der Versuch danebengeht. Bei einem neuen Wort tippst
+du also einmal ins Leere, drückst *Weiss ich nicht* und siehst dann die Lösung —
+genau das ist der Lerneffekt. Neue Wörter tragen die Markierung *neu*.
 
 Geurteilt wird in vier Stufen:
 
@@ -106,8 +139,21 @@ ignoriert. Den Artikel darfst du mitschreiben, musst du aber nicht.
 *Weiss ich nicht* zeigt die Lösung sofort. Das Wort bleibt im Pool und kommt in
 derselben Runde noch einmal.
 
-Danach bewertest du mit den vier FSRS-Stufen; unter jeder steht, wann das Wort
-wiederkommt. Die Tastatur reicht: Enter prüft, Enter bestätigt.
+Du bewertest nichts selbst. Die Stufe für FSRS ergibt sich aus der Antwort:
+
+| | |
+|---|---|
+| falsch oder *Weiss ich nicht* | Nochmal |
+| Schreibfehler oder falscher Artikel | Schwer |
+| richtig, aber zäh | Schwer |
+| richtig | Gut |
+| richtig und flott | Leicht |
+
+„Flott" richtet sich nach der Wortlänge: rund vier Sekunden plus 0,4 pro Zeichen
+zum Lesen, Überlegen und Tippen. Über dem Zweieinhalbfachen davon zählt es als
+mühsam. Auf dem Ergebnisbildschirm steht, wann das Wort dadurch wiederkommt.
+
+Die Tastatur reicht durch die ganze Runde: Enter prüft, Enter geht weiter.
 
 Karten, die auf „in wenigen Minuten“ gesetzt werden, hängt die Runde hinten wieder
 an — höchstens zweimal pro Wort, damit eine Runde nicht endlos wird.
