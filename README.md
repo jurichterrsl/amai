@@ -79,8 +79,19 @@ dreimal durch, jeweils vollständig, bevor der nächste Durchgang beginnt:
 Wiedererkennen ist deutlich leichter als Produzieren, und wenn das mitgerechnet
 würde, hielte der Scheduler dich für sicherer, als du bist.
 
+**Welche Wörter genommen werden.** Aus *Noch 3* die mit der niedrigsten Stabilität
+zuerst — das sind die, die dem Vergessen am nächsten sind. Was heute schon geübt
+wurde, bleibt aussen vor.
+
+Der Tagesfilter ist nicht nur gegen Wiederholung. FSRS wertet eine Abfrage am
+selben Tag fast gar nicht: Stabilität 0,3 wird zu 0,34, das Wort bliebe für immer
+in *Noch 3*. Einen Tag später bringt dieselbe Antwort 0,3 auf 1,95 und mit *Leicht*
+auf 3,39 — und damit wandert es nach *Noch 2*. Der Abschlussbildschirm sagt, wie
+viele aufgestiegen sind.
+
 Die Modi stehen auf der Startseite untereinander, gleich eingefärbt, jeder mit
-einer Zeile, die sagt, was er tut. *Einprägen* erscheint nur, wenn im Fach *Noch 3* etwas liegt.
+einer Zeile, die sagt, was er tut. *Einprägen* erscheint nur, wenn für heute noch
+etwas in *Noch 3* liegt, und nennt die Anzahl.
 
 Ein weiterer Modus ist ein weiterer Eintrag in der Liste `MODES` in `index.html`;
 das Markup passt sich an.

@@ -134,7 +134,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v24";        // muss zu CACHE in sw.js passen
+const VERSION = "v25";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -294,8 +294,8 @@ const MODES = [
     hint: () => "Fällige Wiederholungen und neue Wörter",
     show: () => true },
   { id:"drill", label:"Einprägen",
-    hint: () => `${boxCounts().b3} Wörter aus „Noch 3“ — Karte, Auswahl, Tippen`,
-    show: () => boxCounts().b3 > 0 },
+    hint: () => `${drillPool().length} Wörter aus „Noch 3“ — Karte, Auswahl, Tippen`,
+    show: () => drillPool().length > 0 },
 ];
 function backupAge(){
   if(!Object.keys(S.cards).length) return null;
@@ -625,11 +625,24 @@ const PHASES = [
   { id:"choice", label:"Wählen" },
   { id:"type",   label:"Tippen" },
 ];
-function drillPool(){ return WORDS.filter(w => boxOf(w.key) === "b3").map(w => w.key); }
+// Wörter für „Einprägen": die wackeligsten aus „Noch 3" zuerst — niedrige
+// Stabilität heisst, sie sind dem Vergessen am nächsten.
+// Heute schon Geübtes bleibt aussen vor. Das ist nicht nur gegen Wiederholung:
+// FSRS wertet eine Abfrage am selben Tag fast gar nicht (Stabilität 0,3 -> 0,34),
+// einen Tag später dagegen deutlich (0,3 -> 1,95). Nur so wandert ein Wort
+// überhaupt nach „Noch 2".
+function drillPool(){
+  const today = todayStr();
+  return WORDS.filter(w => boxOf(w.key) === "b3" && S.cards[w.key] &&
+                           S.cards[w.key].seenDay !== today)
+              .sort((a,b) => S.cards[a.key].stability - S.cards[b.key].stability)
+              .map(w => w.key);
+}
 function startDrill(){
   const pool = drillPool();
   if(!pool.length) return go("home");
-  D.keys = shuffle(pool).slice(0, S.settings.sessionSize);
+  // Die wackeligsten auswählen, für die Vorführung mischen.
+  D.keys = shuffle(pool.slice(0, S.settings.sessionSize));
   D.phase = 0; D.i = 0; D.right = 0; D.typed = 0;
   prepDrill();
   go("drill");
@@ -752,11 +765,13 @@ function Drill(){
 function DrillDone(){
   const n = document.createElement("div"); n.className="screen";
   const left = drillPool().length;
+  const moved = (D.keys||[]).filter(k => boxOf(k) !== "b3").length;
   n.innerHTML = header("Einprägen", "fertig") + `
     <div class="grow center">
       <p class="done">Durch.</p>
       <p class="gloss dim">${D.keys.length} Wörter dreimal gesehen: Karte, Auswahl, Tippen.</p>
-      <p class="note" style="margin-top:1.4rem">${left ? `Noch ${left} Wörter im Fach „Noch 3“.` : "Das Fach „Noch 3“ ist leer."}</p>
+      <p class="note" style="margin-top:1.4rem">${moved ? `${moved} davon ${moved===1?"ist":"sind"} nach „Noch 2“ gewandert. ` : ""}${
+        left ? `Noch ${left} Wörter für heute im Fach „Noch 3“.` : "Für heute ist „Noch 3“ durch."}</p>
     </div>
     <div class="bottom">
       <button class="btn ghost" data-go="home">Schliessen</button>
