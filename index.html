@@ -134,7 +134,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v23";        // muss zu CACHE in sw.js passen
+const VERSION = "v24";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -348,16 +348,17 @@ const R = {};
 // Neue Wörter werden pro Runde zugeteilt, nicht pro Kalendertag. Wer eine Woche
 // pausiert, hat nichts „verpasst" — das Tempo hängt daran, wie oft du übst.
 // Der Anteil sinkt, wenn viel zu wiederholen ist oder die Trefferquote fällt.
-function newShare(repsCount){
+// Eine Runde ist so lang wie eingestellt, solange es überhaupt genug zu tun gibt.
+// Höchstens 70 % Wiederholungen, damit immer neue Wörter nachrücken; sind zu
+// wenige neue im Fenster, füllen Wiederholungen auf, und umgekehrt.
+function buildRound(){
   const size = S.settings.sessionSize;
-  let share = Math.max(0, size - repsCount);
-  const recent = S.history.slice(-40);
-  if(recent.length >= 15){
-    const hit = recent.filter(h => h.r >= 3).length / recent.length;
-    if(hit < 0.65) share = Math.round(share * 0.4);
-    else if(hit < 0.80) share = Math.round(share * 0.7);
-  }
-  return Math.max(1, share);
+  const due  = dueList();
+  let reps  = due.slice(0, Math.round(size * 0.7));
+  let fresh = nextNew(size - reps.length);
+  if(reps.length + fresh.length < size) reps  = due.slice(0, size - fresh.length);
+  if(reps.length + fresh.length < size) fresh = nextNew(size - reps.length);
+  return shuffle(reps.concat(fresh));
 }
 // Neue Wörter kommen nur aus einem Fenster oberhalb deiner Grenze. Das Fenster
 // wächst mit jeder Karte, die es in den Langzeitrhythmus geschafft hat — damit
@@ -381,10 +382,7 @@ function nextNew(limit){
 function startSession(){
   // Am längsten überfällige zuerst. Ein Rückstand wird nie angezeigt und nie
   // eingefordert — er läuft über die nächsten Runden von selbst ab.
-  const due = dueList();
-  const reps = due.slice(0, Math.round(S.settings.sessionSize * 0.7));
-  const fresh = nextNew(newShare(reps.length));
-  R.items = shuffle(reps.concat(fresh));
+  R.items = buildRound();
   R.i = 0; R.answered = 0; R.right = 0; R.retired = 0; R.repeats = {};
   if(!R.items.length) return go("home");
   prepCard(); go("session");
@@ -486,7 +484,8 @@ function grade(rating){
     prepCard(); return render();
   }
   const out = applyRating(key, rating);
-  R.answered++; if(rating >= 3) R.right++;
+  const firstTry = !(R.repeats && R.repeats[key]);
+  if(firstTry){ R.answered++; if(rating >= 3) R.right++; }
   // In derselben Runde wiederholt wird nur, was du gar nicht wusstest — also
   // „Weiss ich nicht" oder eine falsche Antwort. Ein Tippfehler oder ein falscher
   // Artikel zählt als gewusst und kommt erst beim nächsten Termin wieder.

@@ -201,13 +201,18 @@ Eine Runde umfasst standardmässig **sieben Karten** (unter *Daten* änderbar) u
 besteht aus höchstens 70 % Wiederholungen, am längsten überfällige zuerst, der Rest
 sind neue Wörter.
 
-**Die Anpassung bremst nur, sie beschleunigt nicht.** Eine Runde wird nie länger
-als eingestellt. Liegt die Trefferquote der letzten 40 Abfragen unter 65 %, kommen
-nur noch 40 % der neuen Wörter dazu; unter 80 % sind es 70 %.
+**Eine Runde hat immer die eingestellte Länge**, solange es überhaupt so viel zu
+tun gibt. Reichen die neuen Wörter nicht, füllen Wiederholungen auf, und umgekehrt.
 
-In diese Quote zählen auch die Wörter, die du beim Erstkontakt sofort aussortiert
-hast. Ohne sie sähe die Statistik nur die Fehlschläge und würde den Nachschub
-drosseln, obwohl es gut läuft.
+Es gibt keine Bremse nach Trefferquote mehr. Sie mass etwas anderes, als sie zu
+messen vorgab: die Wiederholungsschlange besteht per Bauart aus genau den Wörtern,
+die gerade nicht sitzen, also sinkt die Quote zwangsläufig, je länger man übt — und
+die Runde wurde kürzer, obwohl nichts falsch lief.
+
+Gegen zu viel Schweres auf einmal wirken zwei andere Dinge, die das ohnehin besser
+tun: das **Schwierigkeitsfenster**, das die Ränge begrenzt, und die **Verdrängung** —
+sammeln sich Fehler an, füllen Wiederholungen die Runde und drücken die neuen
+Wörter von selbst auf zwei pro Runde herunter.
 
 **Ein Rückstand wird nie angezeigt und nie eingefordert.** Wer nach einem Monat
 zurückkommt, bekommt dieselbe Runde wie immer; der Stau läuft über die folgenden
