@@ -68,7 +68,9 @@ und neuen Wörtern, alles getippt. Das ist der Modus, der den Lernstand vorantre
 dem Fach *Noch 3*, also die, die dir zuletzt nicht sassen, und geht mit ihnen
 dreimal durch, jeweils vollständig, bevor der nächste Durchgang beginnt:
 
-1. **Karte** — deutsche Seite, Tippen dreht auf die niederländische. Nur ansehen.
+1. **Karte** — deutsche Seite, Tippen dreht auf die niederländische. Auf der
+   Rückseite steht beides untereinander, damit sich die Formen vergleichen lassen.
+   Nur ansehen.
 2. **Wählen** — die deutsche Bedeutung und vier niederländische Wörter zur Auswahl,
    drei davon aus derselben Wortart mit ähnlicher Häufigkeit.
 3. **Tippen** — wie in der Abfrage, mit Artikel.
@@ -77,8 +79,8 @@ dreimal durch, jeweils vollständig, bevor der nächste Durchgang beginnt:
 Wiedererkennen ist deutlich leichter als Produzieren, und wenn das mitgerechnet
 würde, hielte der Scheduler dich für sicherer, als du bist.
 
-Die Modi stehen auf der Startseite untereinander, jeder mit einer Zeile, die sagt,
-was er tut. *Einprägen* erscheint nur, wenn im Fach *Noch 3* etwas liegt.
+Die Modi stehen auf der Startseite untereinander, gleich eingefärbt, jeder mit
+einer Zeile, die sagt, was er tut. *Einprägen* erscheint nur, wenn im Fach *Noch 3* etwas liegt.
 
 Ein weiterer Modus ist ein weiterer Eintrag in der Liste `MODES` in `index.html`;
 das Markup passt sich an.
@@ -89,6 +91,10 @@ das Markup passt sich an.
 Bedeutung steht oben, darunter ein Eingabefeld. Nichts wird vorher vorgezeigt.
 Ein Rateversuch vor der Auflösung verankert ein Wort besser als blosses Anschauen,
 auch wenn der Versuch danebengeht.
+
+Wo immer das niederländische Wort zu sehen ist — auf der Auflösung wie auf der
+Kartenrückseite — steht die deutsche Bedeutung darunter, damit sich beide
+gegenüberstellen lassen.
 
 Wo ein Beispielsatz hinterlegt ist, steht er mit Lücke dazwischen. Die 256 ältesten
 Einträge haben einen, die übrigen nicht.

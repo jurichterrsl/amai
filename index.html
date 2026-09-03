@@ -70,7 +70,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .btn.mode{text-align:left;padding:.7rem .9rem}
 .btn.mode b{display:block;font-weight:500;font-size:1.02rem}
 .btn.mode small{display:block;font-size:.76rem;opacity:.72;margin-top:.1rem}
-.btn.mode.primary{text-align:left}
+
 @media (prefers-color-scheme:dark){.btn.primary{color:#0F1418}}
 .btn.ghost{background:transparent}
 .btn.correct{border-color:var(--moss);box-shadow:inset 0 0 0 1px var(--moss)}
@@ -134,7 +134,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v22";        // muss zu CACHE in sw.js passen
+const VERSION = "v23";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -292,7 +292,7 @@ function header(title, right, back){
 const MODES = [
   { id:"session", label:"Abfrage",
     hint: () => "Fällige Wiederholungen und neue Wörter",
-    show: () => true, primary: true },
+    show: () => true },
   { id:"drill", label:"Einprägen",
     hint: () => `${boxCounts().b3} Wörter aus „Noch 3“ — Karte, Auswahl, Tippen`,
     show: () => boxCounts().b3 > 0 },
@@ -322,7 +322,7 @@ function Home(){
       </div>
       <div class="bottom">
         ${MODES.filter(m => m.show()).map(m => `
-          <button class="btn mode${m.primary?" primary":""}" data-go="${m.id}">
+          <button class="btn mode" data-go="${m.id}">
             <b>${esc(m.label)}</b><small>${m.hint()}</small></button>`).join("")}
         <div class="row">
           <button class="btn ghost" data-go="pool">Pool</button>
@@ -663,7 +663,8 @@ function Drill(){
       <div class="grow center" data-flip style="cursor:pointer">
         <p class="meta">${D.flipped ? "Niederländisch" : "Deutsch"}</p>
         <p class="word${(D.flipped?w.nl:w.de).length>12?" long":""}">${D.flipped ? full : esc(w.de)}</p>
-        <p class="note" style="margin-top:1.2rem">${D.flipped ? "&nbsp;" : "Tippen zum Umdrehen"}</p>
+        ${D.flipped ? `<p class="gloss dim">${esc(w.de)}</p>` : ""}
+        <p class="note" style="margin-top:1.2rem">${D.flipped ? "Tippen dreht zurück" : "Tippen zum Umdrehen"}</p>
       </div>`;
     bottom = `<div class="bottom">
         <p class="note pad">&nbsp;</p>
