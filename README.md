@@ -59,6 +59,86 @@ abgehakt, und im Unterschied zu einem Ja/Nein-Test prüfen sie dabei auch den
 Artikel: gut jedes vierte niederländische Substantiv ist ein *het*-Wort, und ein
 angekreuztes „kenne ich" hätte das nie aufgedeckt.
 
+## Zwei Modi
+
+**Abfrage** — der Normalbetrieb. Eine gemischte Runde aus fälligen Wiederholungen
+und neuen Wörtern, alles getippt. Das ist der Modus, der den Lernstand vorantreibt.
+
+**Einprägen** — für Wörter, die hängenbleiben. Er nimmt ausschliesslich Wörter aus
+dem Fach *Noch 3*, also die, die dir zuletzt nicht sassen, und geht mit ihnen
+dreimal durch, jeweils vollständig, bevor der nächste Durchgang beginnt:
+
+1. **Karte** — deutsche Seite, Tippen dreht auf die niederländische. Nur ansehen.
+2. **Wählen** — die deutsche Bedeutung und vier niederländische Wörter zur Auswahl,
+   drei davon aus derselben Wortart mit ähnlicher Häufigkeit.
+3. **Tippen** — wie in der Abfrage, mit Artikel.
+
+**Nur der dritte Durchgang zählt für FSRS.** Karte und Auswahl sind Vorbereitung:
+Wiedererkennen ist deutlich leichter als Produzieren, und wenn das mitgerechnet
+würde, hielte der Scheduler dich für sicherer, als du bist.
+
+Die Modi stehen auf der Startseite untereinander, jeder mit einer Zeile, die sagt,
+was er tut. *Einprägen* erscheint nur, wenn im Fach *Noch 3* etwas liegt.
+
+Ein weiterer Modus ist ein weiterer Eintrag in der Liste `MODES` in `index.html`;
+das Markup passt sich an.
+
+## Wie eine Karte abläuft
+
+**Jedes Wort beginnt als Abfrage — auch beim allerersten Mal.** Die deutsche
+Bedeutung steht oben, darunter ein Eingabefeld. Nichts wird vorher vorgezeigt.
+Ein Rateversuch vor der Auflösung verankert ein Wort besser als blosses Anschauen,
+auch wenn der Versuch danebengeht.
+
+Wo ein Beispielsatz hinterlegt ist, steht er mit Lücke dazwischen. Die 256 ältesten
+Einträge haben einen, die übrigen nicht.
+
+Geurteilt wird in sechs Stufen:
+
+| Eingabe | Urteil |
+|---|---|
+| genau richtig | **Richtig.** |
+| ein Zeichen daneben | **Fast — achte auf die Schreibweise.** |
+| Artikel fehlt bei einem Substantiv | **Fast — mit Artikel: de/het …** |
+| richtig, falscher Artikel | **Richtig, aber es heisst het/de …** |
+| anderes Wort mit derselben Bedeutung | **Auch richtig. Gesucht war …** |
+| ein anderes Wort aus der Liste | **Das ist „…"** mit dessen Bedeutung |
+| sonst | **Leider nicht.** |
+
+Gross- und Kleinschreibung, Satzzeichen und überzählige Leerzeichen werden
+ignoriert. **Bei Substantiven gehört der Artikel dazu** — „de kans", nicht „kans".
+Das Geschlecht lässt sich im Niederländischen nicht ableiten, also muss es
+mitgelernt werden.
+
+*Weiss ich nicht* zeigt die Lösung sofort.
+
+**In derselben Runde wiederholt wird nur, was du gar nicht wusstest** — eine falsche
+Antwort oder *Weiss ich nicht*, und höchstens einmal. Ein Tippfehler oder ein
+falscher Artikel zählt als gewusst und kommt erst zum nächsten Termin wieder. Eine
+Runde von sieben Karten wird damit auch im schlechtesten Fall nicht länger als
+vierzehn Abfragen.
+
+Du bewertest nichts selbst. Die Stufe für FSRS ergibt sich aus der Antwort:
+
+| | |
+|---|---|
+| falsch oder *Weiss ich nicht* | Nochmal |
+| Schreibfehler oder falscher Artikel | Schwer |
+| richtig, aber zäh | Schwer |
+| Wort mit gleicher Bedeutung | Gut |
+| richtig | Gut |
+| richtig und flott | Leicht |
+
+„Flott" richtet sich nach der Wortlänge: rund vier Sekunden plus 0,4 pro Zeichen
+zum Lesen, Überlegen und Tippen.
+
+**Bedienung.** *Prüfen* und *Weiter* liegen an derselben Stelle, damit der Daumen
+nicht wandern muss. Enter prüft, danach genügt ein Tipp auf *Weiter*. Das
+Eingabefeld bekommt den Fokus **synchron in derselben Berührung**, die die Karte
+umblättert — iOS öffnet die Tastatur nur dann von selbst. Ein `setTimeout`
+dazwischen würde die Kette unterbrechen, und du müsstest jedes Mal erst ins Feld
+tippen.
+
 ## Die fünf Fächer
 
 Auf der Startseite steht der Fortschritt durch die Liste, gegliedert in fünf Fächer:
@@ -79,6 +159,22 @@ Leitner-Fächer mit festen Abständen wären die klassische Umsetzung, aber sie
 ignorieren, wie schwer ein einzelnes Wort für dich ist. FSRS schätzt das pro Wort
 aus den Antworten. Die Fächer sind das Bild davon.
 
+## Pool
+
+Der Pool ist die Übersicht über die fünf Fächer. Oben eine Reihe von Filtern mit
+den Zahlen, darunter ein Suchfeld, darunter die Wörter des gewählten Fachs mit
+Bedeutung und nächstem Termin.
+
+- **✕** legt ein Wort dauerhaft als gekonnt ab.
+- **↺** holt ein aussortiertes Wort zurück in den Pool — falls du es beim ersten
+  Kontakt geraten hast.
+- *Neu* steht in der Reihenfolge der Warteschlange, die Lernfächer nach nächstem
+  Termin, *Gekonnt* nach Häufigkeit.
+
+Pro Fach werden 150 Wörter gezeigt; bei mehr hilft die Suche, die über
+Niederländisch und Deutsch geht. Das gewählte Fach bleibt erhalten, auch nach
+*Wort hinzufügen*.
+
 ## Aussortieren
 
 **Beim allerersten Kontakt richtig getippt** heisst: du kennst das Wort. Es wandert
@@ -97,18 +193,19 @@ Kalendertag — eine Woche Pause kostet dich also nichts.
 
 Eine Runde umfasst standardmässig **sieben Karten** (unter *Daten* änderbar) und
 besteht aus höchstens 70 % Wiederholungen, am längsten überfällige zuerst, der Rest
-sind neue Wörter. Der Anteil neuer Wörter sinkt, wenn die
-Trefferquote der letzten 40 Abfragen fällt.
+sind neue Wörter.
+
+**Die Anpassung bremst nur, sie beschleunigt nicht.** Eine Runde wird nie länger
+als eingestellt. Liegt die Trefferquote der letzten 40 Abfragen unter 65 %, kommen
+nur noch 40 % der neuen Wörter dazu; unter 80 % sind es 70 %.
+
+In diese Quote zählen auch die Wörter, die du beim Erstkontakt sofort aussortiert
+hast. Ohne sie sähe die Statistik nur die Fehlschläge und würde den Nachschub
+drosseln, obwohl es gut läuft.
 
 **Ein Rückstand wird nie angezeigt und nie eingefordert.** Wer nach einem Monat
 zurückkommt, bekommt dieselbe Runde wie immer; der Stau läuft über die folgenden
-Runden von selbst ab. Zehn Runden simuliert, ab Grenze 500:
-
-| Trefferquote | bearbeitete Wörter je Runde | nach 10 Runden |
-|---|---|---|
-| 90 % | 20 → 6 | 116 Wörter, bis Rang 2502 |
-| 75 % | 20 → 6 | 88 Wörter, bis Rang 2018 |
-| 50 % | 20 → 6 | 74 Wörter, bis Rang 1802 |
+Runden von selbst ab.
 
 Die Abstände selbst rechnet FSRS weiter in echten Tagen, nicht in Nutzungstagen.
 Vergessen richtet sich nach verstrichener Zeit, nicht danach, wie oft die App

@@ -67,6 +67,10 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .btn:active{transform:scale(.985)}
 .btn:focus-visible,button:focus-visible{outline:2px solid var(--delft);outline-offset:2px}
 .btn.primary{background:var(--delft);border-color:var(--delft);color:#fff;text-align:center;font-weight:500}
+.btn.mode{text-align:left;padding:.7rem .9rem}
+.btn.mode b{display:block;font-weight:500;font-size:1.02rem}
+.btn.mode small{display:block;font-size:.76rem;opacity:.72;margin-top:.1rem}
+.btn.mode.primary{text-align:left}
 @media (prefers-color-scheme:dark){.btn.primary{color:#0F1418}}
 .btn.ghost{background:transparent}
 .btn.correct{border-color:var(--moss);box-shadow:inset 0 0 0 1px var(--moss)}
@@ -86,6 +90,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .bottom .ghosted{visibility:hidden;pointer-events:none}
 
 /* ---- misc ---- */
+.chips{display:flex;gap:.3rem;overflow-x:auto;padding:.7rem 0 .5rem;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);border-radius:999px;padding:.32rem .7rem;
+  font-size:.8rem;background:var(--raise);color:var(--mute);white-space:nowrap}
+.chip span{margin-left:.35rem;font-variant-numeric:tabular-nums;opacity:.7}
+.chip.on{background:var(--delft);border-color:var(--delft);color:#fff}
+@media (prefers-color-scheme:dark){.chip.on{color:#0F1418}}
 .pool{border-top:1px solid var(--line-soft);padding:.6rem 0;display:flex;gap:.75rem;align-items:baseline}
 .pool .nl{font-family:var(--serif);font-size:1.05rem}
 .pool .de{flex:1;font-size:.88rem;color:var(--mute);text-align:right}
@@ -123,7 +134,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v16";        // muss zu CACHE in sw.js passen
+const VERSION = "v22";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -243,16 +254,28 @@ function dueList(){
 
 // ---------- Routing ----------
 let view = "home", ctx = {};
+let WANT_FOCUS = false;   // wird von Session() gesetzt, von render() ausgeführt
 function go(v, c={}){ view=v; ctx=c; render(); window.scrollTo(0,0); }
 function render(){
   const fns = { home:Home, session:Session, sessionDone:SessionDone,
+                drill:Drill, drillDone:DrillDone,
                 pool:Pool, add:AddWord, data:Data };
   app.innerHTML = "";
+  WANT_FOCUS = false;
   const node = fns[view]();
-  on(node, "[data-back]", ()=> go(BACKTO[view] || "home"));
+  if(view === "pool") LAST_BOX = ctx.box || LAST_BOX;
+  on(node, "[data-back]", ()=> go(BACKTO[view] || "home", view === "add" ? { box: LAST_BOX } : {}));
   app.appendChild(node);
+  // Synchron, nicht über setTimeout: sonst gilt es auf iOS nicht mehr als
+  // Folge der Berührung und die Tastatur bleibt zu.
+  if(WANT_FOCUS){
+    const el = node.querySelector("#ans");
+    if(el){ try{ el.focus({ preventScroll:true }); }catch(e){ try{ el.focus(); }catch(e2){} } }
+  }
 }
 const BACKTO = { pool:"home", data:"home", add:"pool" };
+// ctx überlebt den Wechsel nach „Wort hinzufügen" nicht, deshalb gemerkt:
+let LAST_BOX = null;
 function el(html){ const t=document.createElement("template"); t.innerHTML=html.trim(); return t.content.firstElementChild; }
 function on(root, sel, fn, ev="click"){ root.querySelectorAll(sel).forEach(n=>n.addEventListener(ev, fn)); }
 
@@ -265,6 +288,15 @@ function header(title, right, back){
 /* ============================================================
    HOME
    ============================================================ */
+// Die Modi stehen untereinander. Ein weiterer ist ein weiterer Eintrag hier.
+const MODES = [
+  { id:"session", label:"Abfrage",
+    hint: () => "Fällige Wiederholungen und neue Wörter",
+    show: () => true, primary: true },
+  { id:"drill", label:"Einprägen",
+    hint: () => `${boxCounts().b3} Wörter aus „Noch 3“ — Karte, Auswahl, Tippen`,
+    show: () => boxCounts().b3 > 0 },
+];
 function backupAge(){
   if(!Object.keys(S.cards).length) return null;
   const since = S.lastExport || (S.history[0] && S.history[0].t) || Date.now();
@@ -289,7 +321,9 @@ function Home(){
         <div style="margin-top:1.6rem">${bar}</div>
       </div>
       <div class="bottom">
-        <button class="btn primary" data-go="session">Loslegen</button>
+        ${MODES.filter(m => m.show()).map(m => `
+          <button class="btn mode${m.primary?" primary":""}" data-go="${m.id}">
+            <b>${esc(m.label)}</b><small>${m.hint()}</small></button>`).join("")}
         <div class="row">
           <button class="btn ghost" data-go="pool">Pool</button>
           <button class="btn ghost" data-go="data">Daten</button>
@@ -300,7 +334,9 @@ function Home(){
   n.innerHTML = header("Amai") + body;
   on(n, "[data-go]", e => {
     const v = e.currentTarget.dataset.go;
-    if(v==="session") startSession(); else go(v);
+    if(v==="session") startSession();
+    else if(v==="drill") startDrill();
+    else go(v);
   });
   return n;
 }
@@ -312,15 +348,14 @@ const R = {};
 // Neue Wörter werden pro Runde zugeteilt, nicht pro Kalendertag. Wer eine Woche
 // pausiert, hat nichts „verpasst" — das Tempo hängt daran, wie oft du übst.
 // Der Anteil sinkt, wenn viel zu wiederholen ist oder die Trefferquote fällt.
-function newShare(dueCount){
+function newShare(repsCount){
   const size = S.settings.sessionSize;
-  let share = Math.max(0, size - Math.min(dueCount, Math.round(size * 0.7)));
+  let share = Math.max(0, size - repsCount);
   const recent = S.history.slice(-40);
   if(recent.length >= 15){
     const hit = recent.filter(h => h.r >= 3).length / recent.length;
-    if(hit < 0.65) share = Math.round(share * 0.3);
-    else if(hit < 0.80) share = Math.round(share * 0.6);
-    else if(hit > 0.92) share = Math.round(share * 1.3);
+    if(hit < 0.65) share = Math.round(share * 0.4);
+    else if(hit < 0.80) share = Math.round(share * 0.7);
   }
   return Math.max(1, share);
 }
@@ -348,9 +383,9 @@ function startSession(){
   // eingefordert — er läuft über die nächsten Runden von selbst ab.
   const due = dueList();
   const reps = due.slice(0, Math.round(S.settings.sessionSize * 0.7));
-  const fresh = nextNew(newShare(due.length));
+  const fresh = nextNew(newShare(reps.length));
   R.items = shuffle(reps.concat(fresh));
-  R.i = 0; R.answered = 0; R.right = 0; R.repeats = {};
+  R.i = 0; R.answered = 0; R.right = 0; R.retired = 0; R.repeats = {};
   if(!R.items.length) return go("home");
   prepCard(); go("session");
 }
@@ -416,19 +451,9 @@ const MAX_REPEATS = 1;
 function willRequeue(key, rating){
   return rating === 1 && ((R.repeats && R.repeats[key]) || 0) < MAX_REPEATS;
 }
-function grade(rating){
-  const key = R.key;
-  // Wer ein Wort beim allerersten Kontakt auf Anhieb tippt, kennt es. Aussortieren.
-  // Alles, was einmal danebenging, muss dagegen mehrere Abfragen überstehen.
-  if(R.isNew && rating === 4 && R.judged && R.judged.verdict === "right"){
-    S.known.push(key);
-    S.triaged = (S.triaged || 0) + 1;
-    R.retired = (R.retired || 0) + 1;
-    R.answered++; R.right++;
-    save(); R.i++;
-    if(R.i >= R.items.length) return go("sessionDone");
-    prepCard(); return render();
-  }
+// Bewertung anwenden: FSRS fortschreiben und in der Historie festhalten.
+// Wird von beiden Modi benutzt.
+function applyRating(key, rating){
   const prev = S.cards[key] || createEmptyCard(new Date());
   const out = F.repeat(prev, new Date())[rating];
   if(!S.cards[key]) S.daily.newDone++;
@@ -436,6 +461,31 @@ function grade(rating){
   S.cards[key] = out.card;
   S.history.push({ k:key, r:rating, t:Date.now() });
   if(S.history.length > 4000) S.history = S.history.slice(-3000);
+  return out;
+}
+// Auswahlmöglichkeiten: das gesuchte Wort und drei aus derselben Wortart,
+// möglichst ähnlich häufig.
+function mcOptions(w){
+  const same = WORDS.filter(x => x.pos === w.pos && x.key !== w.key);
+  const near = same.sort((a,b) => Math.abs(a.rank-w.rank) - Math.abs(b.rank-w.rank)).slice(0,60);
+  return shuffle([w, ...shuffle(near).slice(0,3)]);
+}
+function grade(rating){
+  const key = R.key;
+  // Wer ein Wort beim allerersten Kontakt auf Anhieb tippt, kennt es. Aussortieren.
+  // Alles, was einmal danebenging, muss dagegen mehrere Abfragen überstehen.
+  if(R.isNew && rating === 4 && R.judged && R.judged.verdict === "right"){
+    S.known.push(key);
+    S.triaged = (S.triaged || 0) + 1;
+    R.retired++;
+    R.answered++; R.right++;
+    S.history.push({ k:key, r:4, t:Date.now() });
+    if(S.history.length > 4000) S.history = S.history.slice(-3000);
+    save(); R.i++;
+    if(R.i >= R.items.length) return go("sessionDone");
+    prepCard(); return render();
+  }
+  const out = applyRating(key, rating);
   R.answered++; if(rating >= 3) R.right++;
   // In derselben Runde wiederholt wird nur, was du gar nicht wusstest — also
   // „Weiss ich nicht" oder eine falsche Antwort. Ein Tippfehler oder ein falscher
@@ -453,7 +503,7 @@ function grade(rating){
 function Session(){
   const w = R.w, n = document.createElement("div"); n.className="screen";
   const prog = Math.round(R.i / R.items.length * 100);
-  const head = header("Runde", `${R.i+1}/${R.items.length}${R.isNew?" · neu":""}`) +
+  const head = header("Abfrage", `${R.i+1}/${R.items.length}${R.isNew?" · neu":""}`) +
     `<div class="bar"><i style="width:${prog}%"></i></div>`;
   const artLine = w.art ? `<span class="art">${w.art} </span>` : "";
   let body, bottom;
@@ -536,7 +586,7 @@ function Session(){
   const inp = n.querySelector("#ans");
   if(inp){
     inp.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); check(); } });
-    setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 30);
+    WANT_FOCUS = true;
   } else {
     n.addEventListener("keydown", e => {
       if(e.key !== "Enter") return;
@@ -550,10 +600,12 @@ function Session(){
 function SessionDone(){
   const n = document.createElement("div"); n.className="screen";
   const pct = R.answered ? Math.round(R.right/R.answered*100) : 0;
-  n.innerHTML = header("Runde", "fertig") + `
+  n.innerHTML = header("Abfrage", "fertig") + `
     <div class="grow center">
       <p class="done">Fertig.</p>
-      <p class="gloss dim">${R.answered} Karten, ${pct} % auf Anhieb gewusst${R.retired?`, ${R.retired} aussortiert`:""}.</p>
+      <p class="gloss dim">${R.answered === R.retired
+        ? `${R.answered} ${R.answered===1?"Wort":"Wörter"} — alle auf Anhieb gewusst und aussortiert.`
+        : `${R.answered} Karten, ${pct} % auf Anhieb gewusst${R.retired?`, ${R.retired} aussortiert`:""}.`}</p>
       <p class="note" style="margin-top:1.4rem">Der Rest kommt von allein wieder.</p>
     </div>
     <div class="bottom">
@@ -564,47 +616,231 @@ function SessionDone(){
   return n;
 }
 
+
+/* ============================================================
+   EINPRÄGEN — drei Durchgänge über dieselben Wörter aus „Noch 3“
+   ============================================================ */
+const D = {};
+const PHASES = [
+  { id:"card",   label:"Karte"  },
+  { id:"choice", label:"Wählen" },
+  { id:"type",   label:"Tippen" },
+];
+function drillPool(){ return WORDS.filter(w => boxOf(w.key) === "b3").map(w => w.key); }
+function startDrill(){
+  const pool = drillPool();
+  if(!pool.length) return go("home");
+  D.keys = shuffle(pool).slice(0, S.settings.sessionSize);
+  D.phase = 0; D.i = 0; D.right = 0; D.typed = 0;
+  prepDrill();
+  go("drill");
+}
+function prepDrill(){
+  D.flipped = false; D.chosen = null; D.input = ""; D.judged = null;
+  D.shownAt = Date.now();
+  D.w = byKey(D.keys[D.i]);
+  if(PHASES[D.phase].id === "choice") D.options = mcOptions(D.w);
+}
+function drillNext(){
+  D.i++;
+  if(D.i >= D.keys.length){
+    D.i = 0; D.phase++;
+    if(D.phase >= PHASES.length) return go("drillDone");
+  }
+  prepDrill(); render();
+}
+function Drill(){
+  const w = D.w, ph = PHASES[D.phase];
+  const n = document.createElement("div"); n.className = "screen";
+  const done = D.phase * D.keys.length + D.i;
+  const head = header("Einprägen", `${ph.label} ${D.i+1}/${D.keys.length}`) +
+    `<div class="bar"><i style="width:${Math.round(done/(D.keys.length*3)*100)}%"></i></div>`;
+  const full = `${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}`;
+  let body, bottom;
+
+  if(ph.id === "card"){
+    body = `
+      <div class="grow center" data-flip style="cursor:pointer">
+        <p class="meta">${D.flipped ? "Niederländisch" : "Deutsch"}</p>
+        <p class="word${(D.flipped?w.nl:w.de).length>12?" long":""}">${D.flipped ? full : esc(w.de)}</p>
+        <p class="note" style="margin-top:1.2rem">${D.flipped ? "&nbsp;" : "Tippen zum Umdrehen"}</p>
+      </div>`;
+    bottom = `<div class="bottom">
+        <p class="note pad">&nbsp;</p>
+        <button class="btn primary" ${D.flipped?"data-next":"data-flip"}>${D.flipped?"Weiter":"Umdrehen"}</button>
+        <button class="btn ghost ghosted" aria-hidden="true" tabindex="-1">&nbsp;</button>
+      </div>`;
+
+  } else if(ph.id === "choice"){
+    const picked = D.chosen !== null;
+    body = `
+      <div class="grow center">
+        <p class="meta">Welches Wort passt?</p>
+        <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
+        <div class="stack" style="margin-top:1.5rem">
+          ${D.options.map(o => {
+            if(!picked) return `<button class="btn" data-pick="${esc(o.key)}">${o.art?`<span class="art">${o.art} </span>`:""}${esc(o.nl)}</button>`;
+            const cls = o.key===w.key ? "btn correct" : (o.key===D.chosen ? "btn wrong" : "btn");
+            return `<div class="${cls}" style="cursor:default">${o.art?`<span class="art">${o.art} </span>`:""}${esc(o.nl)}</div>`;
+          }).join("")}
+        </div>
+      </div>`;
+    bottom = `<div class="bottom">
+        <p class="note pad">${picked ? (D.chosen===w.key ? "Richtig." : "Das richtige Wort ist markiert.") : "&nbsp;"}</p>
+        <button class="btn primary" ${picked?"data-next":"disabled"} style="${picked?"":"opacity:.4"}">Weiter</button>
+        <button class="btn ghost ghosted" aria-hidden="true" tabindex="-1">&nbsp;</button>
+      </div>`;
+
+  } else {
+    const shown = D.judged !== null;
+    body = `
+      <div class="grow center">
+        <p class="meta">${shown ? "" : "Auf Niederländisch"}&nbsp;</p>
+        <p class="word${(shown?w.nl:w.de).length>14?" long":""}">${shown ? full : esc(w.de)}</p>
+        ${shown ? `<p class="gloss dim">${esc(w.de)}</p>
+          ${D.input && D.judged.verdict!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(D.input)}</p>`:""}` : `
+          <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
+                 spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
+                 style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">`}
+      </div>`;
+    const V = shown ? {
+      right:"Richtig.", typo:"Fast — achte auf die Schreibweise.",
+      article:`Richtig, aber es heisst ${w.art} ${esc(w.nl)}.`,
+      noarticle:`Fast — mit Artikel: ${w.art} ${esc(w.nl)}.`,
+      synonym:"Auch richtig.", idk:"", wrong:"Leider nicht.", empty:""
+    }[D.judged.verdict] : "";
+    bottom = `<div class="bottom">
+        <p class="note pad">${V || "&nbsp;"}</p>
+        <button class="btn primary" ${shown?"data-next":"data-check"}>${shown?"Weiter":"Prüfen"}</button>
+        ${shown ? `<button class="btn ghost ghosted" aria-hidden="true" tabindex="-1">&nbsp;</button>`
+                : `<button class="btn ghost" data-idk>Weiss ich nicht</button>`}
+      </div>`;
+  }
+
+  n.innerHTML = head + body + bottom +
+    `<div style="padding-bottom:1rem"><button class="link" data-quit>Abbrechen</button></div>`;
+
+  on(n,"[data-flip]", ()=>{ D.flipped = !D.flipped; render(); });
+  on(n,"[data-next]", ()=> drillNext());
+  on(n,"[data-pick]", e=>{
+    D.chosen = e.currentTarget.dataset.pick;
+    if(D.chosen === w.key) D.right++;
+    render();
+  });
+  const check = ()=>{
+    const el = n.querySelector("#ans");
+    D.input = el ? el.value : "";
+    D.judged = judge(D.input, w);
+    if(D.judged.verdict === "empty") return;
+    // Nur der Tipp-Durchgang zählt für FSRS — Karte und Auswahl sind Übung.
+    applyRating(D.keys[D.i], autoRating(D.judged.verdict, Date.now()-D.shownAt, w, false));
+    D.typed++; save(); render();
+  };
+  on(n,"[data-check]", check);
+  on(n,"[data-idk]", ()=>{
+    D.input = ""; D.judged = { verdict:"idk" };
+    applyRating(D.keys[D.i], 1); D.typed++; save(); render();
+  });
+  on(n,"[data-quit]", ()=> go(D.typed ? "drillDone" : "home"));
+  const inp = n.querySelector("#ans");
+  if(inp){
+    inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); check(); } });
+    WANT_FOCUS = true;
+  }
+  return n;
+}
+function DrillDone(){
+  const n = document.createElement("div"); n.className="screen";
+  const left = drillPool().length;
+  n.innerHTML = header("Einprägen", "fertig") + `
+    <div class="grow center">
+      <p class="done">Durch.</p>
+      <p class="gloss dim">${D.keys.length} Wörter dreimal gesehen: Karte, Auswahl, Tippen.</p>
+      <p class="note" style="margin-top:1.4rem">${left ? `Noch ${left} Wörter im Fach „Noch 3“.` : "Das Fach „Noch 3“ ist leer."}</p>
+    </div>
+    <div class="bottom">
+      <button class="btn ghost" data-go="home">Schliessen</button>
+      ${left ? `<button class="btn primary" data-go="more">Noch eine Runde</button>` : ""}
+    </div>`;
+  on(n,"[data-go]", e => e.currentTarget.dataset.go==="more" ? startDrill() : go("home"));
+  return n;
+}
+
 /* ============================================================
    POOL
    ============================================================ */
 function Pool(){
   const n = document.createElement("div"); n.className="screen";
-  const row = (k, right) => {
-    const w = byKey(k);
-    return `<div class="pool"><span class="nl">${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}</span>
-      <span class="de">${esc(w.de)}</span><span class="meta" style="width:4.2rem;text-align:right">${right}</span>
-      <button class="link" data-drop="${esc(k)}" style="padding:0">✕</button></div>`;
-  };
   const c = boxCounts();
-  const inBox = id => WORDS.filter(w => boxOf(w.key) === id).map(w => w.key);
-  const section = b => {
-    if(!c[b.id]) return "";
-    const ks = inBox(b.id);
-    const head = `<hr><p class="note">${b.label} — ${c[b.id]} Wörter</p>`;
-    if(b.id === "kann") return head + `<p class="note dim">Aussortiert, kommen nicht mehr.</p>`;
-    if(b.id === "neu"){
-      // Reihenfolge der Warteschlange, nicht nach Rang — selbst hinzugefügte
-      // Wörter stehen vorn und sollen auch vorn auftauchen.
+  // Welches Fach gerade offen ist, merkt sich der Aufruf; so bleibt es beim
+  // Zurückkommen aus „Wort hinzufügen" stehen.
+  const cur = ctx.box || LAST_BOX || (c.neu ? "neu" : "kann");
+  const box = BOXES.find(b => b.id === cur) || BOXES[0];
+
+  const inBox = id => {
+    const ks = WORDS.filter(w => boxOf(w.key) === id).map(w => w.key);
+    if(id === "neu"){
       const pos = new Map(queued().map((k,i)=>[k,i]));
-      const sorted = ks.slice().sort((a,b2)=>
-        (pos.has(a)?pos.get(a):1e9)-(pos.has(b2)?pos.get(b2):1e9) || byKey(a).rank-byKey(b2).rank);
-      return head + sorted.slice(0,60).map(k=>row(k,"")).join("") +
-        (sorted.length>60?`<p class="note">… und ${sorted.length-60} weitere.</p>`:"");
+      return ks.sort((a,b2) => (pos.has(a)?pos.get(a):1e9)-(pos.has(b2)?pos.get(b2):1e9)
+                                || byKey(a).rank - byKey(b2).rank);
     }
-    return head + ks.map(k=>row(k, S.cards[k] ? fmtDue(S.cards[k].due) : "")).join("");
+    if(id === "kann") return ks.sort((a,b2)=> byKey(a).rank - byKey(b2).rank);
+    return ks.sort((a,b2)=> (S.cards[a]?S.cards[a].due:0) - (S.cards[b2]?S.cards[b2].due:0));
   };
-  n.innerHTML = header("Pool", `${c.kann}/${WORDS.length}`, true) + `
-    <div class="scroll">
-      <p class="note" style="margin:.9rem 0">✕ sortiert ein Wort dauerhaft aus.</p>
-      ${BOXES.map(section).join("")}
+  const LIMIT = 150;
+  const row = k => {
+    const w = byKey(k), card = S.cards[k];
+    const right = card ? fmtDue(card.due) : "";
+    const act = S.known.includes(k)
+      ? `<button class="link" data-back-in="${esc(k)}" title="zurück in den Pool">↺</button>`
+      : `<button class="link" data-drop="${esc(k)}" title="als gekonnt ablegen">✕</button>`;
+    return `<div class="pool">
+      <span class="nl">${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}</span>
+      <span class="de">${esc(w.de)}</span>
+      <span class="meta" style="width:3.6rem;text-align:right">${right}</span>${act}</div>`;
+  };
+  const listFor = q => {
+    let ks = inBox(cur);
+    if(q){
+      const t = q.toLowerCase();
+      ks = ks.filter(k => { const w = byKey(k);
+        return w.nl.toLowerCase().includes(t) || w.de.toLowerCase().includes(t); });
+    }
+    if(!ks.length) return `<p class="note">${q ? "Nichts gefunden." : "Dieses Fach ist leer."}</p>`;
+    return ks.slice(0,LIMIT).map(row).join("")
+      + (ks.length>LIMIT ? `<p class="note">… und ${ks.length-LIMIT} weitere. Nutze die Suche.</p>` : "");
+  };
+
+  n.innerHTML = header("Pool", `${c.kann}/${WORDS.length} gekonnt`, true) + `
+    <div class="chips">
+      ${BOXES.map(b=>`<button class="chip${b.id===cur?" on":""}" data-box="${b.id}">
+        ${b.label}<span>${c[b.id]}</span></button>`).join("")}
     </div>
+    <input id="q" type="search" placeholder="Suchen…" autocomplete="off"
+           autocapitalize="none" autocorrect="off" spellcheck="false"
+           style="margin:.1rem 0 .7rem">
+    <div class="scroll" id="list">${listFor("")}</div>
     <div class="bottom">
       <button class="btn ghost" data-go="add">Wort hinzufügen</button>
     </div>`;
-  on(n,"[data-drop]", e=>{
-    const k = e.currentTarget.dataset.drop;
-    S.known.push(k); delete S.cards[k]; save(); render();
-  });
+
+  const list = n.querySelector("#list");
+  const redraw = () => { list.innerHTML = listFor(n.querySelector("#q").value.trim()); wire(); };
+  function wire(){
+    on(list,"[data-drop]", e=>{
+      const k = e.currentTarget.dataset.drop;
+      S.known.push(k); delete S.cards[k]; save(); go("pool", { box:cur });
+    });
+    on(list,"[data-back-in]", e=>{
+      const k = e.currentTarget.dataset["backIn"];
+      S.known = S.known.filter(x => x !== k); save(); go("pool", { box:cur });
+    });
+  }
+  wire();
+  // Nur die Liste neu zeichnen, sonst verliert das Suchfeld bei jedem
+  // Tastendruck den Fokus.
+  on(n,"#q", redraw, "input");
+  on(n,"[data-box]", e=> go("pool", { box: e.currentTarget.dataset.box }));
   on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));
   return n;
 }
@@ -641,7 +877,7 @@ function AddWord(){
                 rank:Number(g("f-rk"))||9000, key:nl };
     S.custom.push(w); buildWords(S);
     S.known = S.known.filter(k=>k!==nl);
-    save(); go("pool");
+    save(); go("pool", { box: LAST_BOX });
   });
   on(n,"[data-go]", e=> go(e.currentTarget.dataset.go));
   return n;
@@ -653,7 +889,7 @@ function AddWord(){
 function Data(){
   const n = document.createElement("div"); n.className="screen";
   const s = S.settings;
-  n.innerHTML = header("Daten &amp; Einstellungen", "", true) + `
+  n.innerHTML = header("Daten & Einstellungen", "", true) + `
     <div class="scroll">
       <label for="s-size">Karten pro Runde</label>
       <input id="s-size" type="number" inputmode="numeric" min="5" max="100" value="${s.sessionSize}">
