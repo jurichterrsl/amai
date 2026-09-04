@@ -69,25 +69,28 @@ dem Fach *Noch 3*, also die, die dir zuletzt nicht sassen, und geht mit ihnen
 dreimal durch, jeweils vollständig, bevor der nächste Durchgang beginnt:
 
 1. **Karte** — deutsche Seite, Tippen dreht auf die niederländische. Auf der
-   Rückseite steht beides untereinander, damit sich die Formen vergleichen lassen.
-   Nur ansehen.
-2. **Wählen** — die deutsche Bedeutung und vier niederländische Wörter zur Auswahl,
-   drei davon aus derselben Wortart mit ähnlicher Häufigkeit.
-3. **Tippen** — wie in der Abfrage, mit Artikel.
+   Rückseite steht beides untereinander. Nur ansehen.
+2. **Bedeutung** — das niederländische Wort und vier deutsche Bedeutungen zur Auswahl.
+3. **Wort** — die deutsche Bedeutung und vier niederländische Wörter zur Auswahl.
+4. **Tippen** — wie in der Abfrage, mit Artikel.
 
-**Nur der dritte Durchgang zählt für FSRS.** Karte und Auswahl sind Vorbereitung:
+Die Ablenker kommen aus derselben Wortart mit ähnlicher Häufigkeit. **Jeder
+Durchgang mischt die Reihenfolge neu**, damit du nicht die Abfolge statt der
+Wörter lernst.
+
+**Nur der Tipp-Durchgang zählt für FSRS.** Karte und Auswahl sind Vorbereitung:
 Wiedererkennen ist deutlich leichter als Produzieren, und wenn das mitgerechnet
 würde, hielte der Scheduler dich für sicherer, als du bist.
 
 **Welche Wörter genommen werden.** Aus *Noch 3* die mit der niedrigsten Stabilität
-zuerst — das sind die, die dem Vergessen am nächsten sind. Was heute schon geübt
-wurde, bleibt aussen vor.
+zuerst — das sind die, die dem Vergessen am nächsten sind.
 
-Der Tagesfilter ist nicht nur gegen Wiederholung. FSRS wertet eine Abfrage am
-selben Tag fast gar nicht: Stabilität 0,3 wird zu 0,34, das Wort bliebe für immer
-in *Noch 3*. Einen Tag später bringt dieselbe Antwort 0,3 auf 1,95 und mit *Leicht*
-auf 3,39 — und damit wandert es nach *Noch 2*. Der Abschlussbildschirm sagt, wie
-viele aufgestiegen sind.
+Ausgeschlossen ist nur, was **heute schon eingeprägt** wurde. Ein Wort, das gerade
+eben in der Abfrage danebenging, lässt sich sofort einprägen; genau dafür ist der
+Modus da. Aufsteigen wird es an diesem Tag allerdings nicht mehr: FSRS wertet eine
+zweite Abfrage am selben Tag kaum, Stabilität 0,3 wird zu 0,34. Einen Tag später
+bringt dieselbe Antwort 0,3 auf 1,95 und mit *Leicht* auf 3,39 — und damit wandert
+das Wort nach *Noch 2*. Der Abschlussbildschirm sagt, wie viele aufgestiegen sind.
 
 Die Modi stehen auf der Startseite untereinander, gleich eingefärbt, jeder mit
 einer Zeile, die sagt, was er tut. *Einprägen* erscheint nur, wenn für heute noch
@@ -121,6 +124,12 @@ Geurteilt wird in sechs Stufen:
 | anderes Wort mit derselben Bedeutung | **Auch richtig. Gesucht war …** |
 | ein anderes Wort aus der Liste | **Das ist „…"** mit dessen Bedeutung |
 | sonst | **Leider nicht.** |
+
+Auf dem Auflösungsbildschirm steht die Rückmeldung oben, darunter das
+niederländische Wort und darunter die deutsche Bedeutung. Bedeutung und Wort
+teilen sich die Serifenschrift, damit sich die beiden Formen unmittelbar
+vergleichen lassen; die Rückmeldung ist genauso gross wie die Bedeutung, aber in
+der Grundschrift, weil sie zur Bedienung gehört und nicht zum Lernstoff.
 
 Gross- und Kleinschreibung, Satzzeichen und überzählige Leerzeichen werden
 ignoriert. **Bei Substantiven gehört der Artikel dazu** — „de kans", nicht „kans".

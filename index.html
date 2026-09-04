@@ -44,6 +44,10 @@ h1{font-family:var(--serif);font-weight:600;font-size:1.5rem;letter-spacing:-.01
   font-size:clamp(2.4rem,11vw,3.4rem);margin:0;overflow-wrap:break-word;hyphens:auto}
 .word.long{font-size:clamp(1.7rem,7.5vw,2.5rem)}
 .gloss{font-size:1.25rem;line-height:1.35;margin:.6rem 0 0}
+/* Auf den Auflösungsbildschirmen: Bedeutung in der Serifenschrift des
+   niederländischen Wortes, Rückmeldung in derselben Größe wie die Bedeutung. */
+.trans{font-family:var(--serif);font-size:1.5rem;line-height:1.3;margin:.45rem 0 0;color:var(--mute)}
+.verdict{font-size:1.5rem;line-height:1.3;margin:0 0 .5rem}
 .sentence{font-family:var(--serif);font-size:1.4rem;line-height:1.45;margin:0}
 .meta{font-size:.82rem;color:var(--mute);margin:0}
 .art{color:var(--mute);font-weight:400}
@@ -134,7 +138,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v25";        // muss zu CACHE in sw.js passen
+const VERSION = "v28";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -540,9 +544,9 @@ function Session(){
     }[v] || "";
     body = `
       <div class="grow center">
-        <p class="meta" style="color:${colour}">${verdictText || "&nbsp;"}</p>
+        <p class="verdict" style="color:${colour}">${verdictText || "&nbsp;"}</p>
         <p class="word${w.nl.length>12?" long":""}">${artLine}${esc(w.nl)}</p>
-        <p class="gloss dim">${esc(w.de)}</p>
+        <p class="trans">${esc(w.de)}</p>
         ${R.typed && v!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(R.typed)}</p>` : ""}
         ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>` : ""}
       </div>`;
@@ -621,20 +625,22 @@ function SessionDone(){
    ============================================================ */
 const D = {};
 const PHASES = [
-  { id:"card",   label:"Karte"  },
-  { id:"choice", label:"Wählen" },
-  { id:"type",   label:"Tippen" },
+  { id:"card",   label:"Karte"     },  // umdrehen, nur ansehen
+  { id:"pickDe", label:"Bedeutung" },  // niederländisch gezeigt, deutsche Bedeutung wählen
+  { id:"pickNl", label:"Wort"      },  // deutsch gezeigt, niederländisches Wort wählen
+  { id:"type",   label:"Tippen"    },
 ];
-// Wörter für „Einprägen": die wackeligsten aus „Noch 3" zuerst — niedrige
+// Wörter für „Einprägen\": die wackeligsten aus „Noch 3\" zuerst — niedrige
 // Stabilität heisst, sie sind dem Vergessen am nächsten.
-// Heute schon Geübtes bleibt aussen vor. Das ist nicht nur gegen Wiederholung:
-// FSRS wertet eine Abfrage am selben Tag fast gar nicht (Stabilität 0,3 -> 0,34),
-// einen Tag später dagegen deutlich (0,3 -> 1,95). Nur so wandert ein Wort
-// überhaupt nach „Noch 2".
+// Ausgeschlossen ist nur, was heute schon eingeprägt wurde — nicht, was heute
+// in der Abfrage vorkam. Ein Wort, das dort gerade danebenging, lässt sich
+// sofort einprägen; genau dafür ist der Modus da. Aufsteigen wird es heute
+// nicht mehr, weil FSRS eine zweite Abfrage am selben Tag kaum wertet
+// (Stabilität 0,3 -> 0,34 statt 0,3 -> 1,95 einen Tag später) — morgen schon.
 function drillPool(){
   const today = todayStr();
   return WORDS.filter(w => boxOf(w.key) === "b3" && S.cards[w.key] &&
-                           S.cards[w.key].seenDay !== today)
+                           S.cards[w.key].drilledDay !== today)
               .sort((a,b) => S.cards[a.key].stability - S.cards[b.key].stability)
               .map(w => w.key);
 }
@@ -642,31 +648,47 @@ function startDrill(){
   const pool = drillPool();
   if(!pool.length) return go("home");
   // Die wackeligsten auswählen, für die Vorführung mischen.
-  D.keys = shuffle(pool.slice(0, S.settings.sessionSize));
+  D.keys = pool.slice(0, S.settings.sessionSize);
   D.phase = 0; D.i = 0; D.right = 0; D.typed = 0;
+  D.order = shuffle(D.keys);
   prepDrill();
   go("drill");
 }
 function prepDrill(){
   D.flipped = false; D.chosen = null; D.input = ""; D.judged = null;
   D.shownAt = Date.now();
-  D.w = byKey(D.keys[D.i]);
-  if(PHASES[D.phase].id === "choice") D.options = mcOptions(D.w);
+  D.w = byKey(D.order[D.i]);
+  const id = PHASES[D.phase].id;
+  if(id === "pickDe" || id === "pickNl") D.options = mcOptions(D.w);
 }
 function drillNext(){
   D.i++;
-  if(D.i >= D.keys.length){
+  if(D.i >= D.order.length){
     D.i = 0; D.phase++;
     if(D.phase >= PHASES.length) return go("drillDone");
+    // Jeder Durchgang bekommt eine eigene Reihenfolge.
+    D.order = shuffle(D.keys);
   }
   prepDrill(); render();
+}
+// Im Einprägen steigt ein Wort nur bei einer sauberen Antwort auf. Wer nach
+// Karte und zweimal Auswahl noch danebentippt oder den Artikel verfehlt, hat es
+// nicht sitzen — die Bewertung geht normal an FSRS, aber die Stabilität wird
+// unterhalb der Grenze zu „Noch 2“ gehalten.
+const CLEAN = { right:1, synonym:1 };
+function drillGrade(key, verdict, ms, w){
+  applyRating(key, autoRating(verdict, ms, w, false));
+  S.cards[key].drilledDay = todayStr();
+  if(!CLEAN[verdict] && S.cards[key] && S.cards[key].stability >= 2){
+    S.cards[key].stability = 1.9;
+  }
 }
 function Drill(){
   const w = D.w, ph = PHASES[D.phase];
   const n = document.createElement("div"); n.className = "screen";
   const done = D.phase * D.keys.length + D.i;
   const head = header("Einprägen", `${ph.label} ${D.i+1}/${D.keys.length}`) +
-    `<div class="bar"><i style="width:${Math.round(done/(D.keys.length*3)*100)}%"></i></div>`;
+    `<div class="bar"><i style="width:${Math.round(done/(D.keys.length*PHASES.length)*100)}%"></i></div>`;
   const full = `${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}`;
   let body, bottom;
 
@@ -675,7 +697,7 @@ function Drill(){
       <div class="grow center" data-flip style="cursor:pointer">
         <p class="meta">${D.flipped ? "Niederländisch" : "Deutsch"}</p>
         <p class="word${(D.flipped?w.nl:w.de).length>12?" long":""}">${D.flipped ? full : esc(w.de)}</p>
-        ${D.flipped ? `<p class="gloss dim">${esc(w.de)}</p>` : ""}
+        ${D.flipped ? `<p class="trans">${esc(w.de)}</p>` : ""}
         <p class="note" style="margin-top:1.2rem">${D.flipped ? "Tippen dreht zurück" : "Tippen zum Umdrehen"}</p>
       </div>`;
     bottom = `<div class="bottom">
@@ -684,17 +706,20 @@ function Drill(){
         <button class="btn ghost ghosted" aria-hidden="true" tabindex="-1">&nbsp;</button>
       </div>`;
 
-  } else if(ph.id === "choice"){
+  } else if(ph.id === "pickDe" || ph.id === "pickNl"){
     const picked = D.chosen !== null;
+    const toDe = ph.id === "pickDe";
+    const label = o => toDe ? esc(o.de) : `${o.art?`<span class="art">${o.art} </span>`:""}${esc(o.nl)}`;
+    const promptWord = toDe ? full : esc(w.de);
     body = `
       <div class="grow center">
-        <p class="meta">Welches Wort passt?</p>
-        <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
+        <p class="meta">${toDe ? "Was heisst das?" : "Welches Wort passt?"}</p>
+        <p class="word${(toDe?w.nl:w.de).length>16?" long":""}">${promptWord}</p>
         <div class="stack" style="margin-top:1.5rem">
           ${D.options.map(o => {
-            if(!picked) return `<button class="btn" data-pick="${esc(o.key)}">${o.art?`<span class="art">${o.art} </span>`:""}${esc(o.nl)}</button>`;
+            if(!picked) return `<button class="btn" data-pick="${esc(o.key)}">${label(o)}</button>`;
             const cls = o.key===w.key ? "btn correct" : (o.key===D.chosen ? "btn wrong" : "btn");
-            return `<div class="${cls}" style="cursor:default">${o.art?`<span class="art">${o.art} </span>`:""}${esc(o.nl)}</div>`;
+            return `<div class="${cls}" style="cursor:default">${label(o)}</div>`;
           }).join("")}
         </div>
       </div>`;
@@ -706,24 +731,27 @@ function Drill(){
 
   } else {
     const shown = D.judged !== null;
-    body = `
-      <div class="grow center">
-        <p class="meta">${shown ? "" : "Auf Niederländisch"}&nbsp;</p>
-        <p class="word${(shown?w.nl:w.de).length>14?" long":""}">${shown ? full : esc(w.de)}</p>
-        ${shown ? `<p class="gloss dim">${esc(w.de)}</p>
-          ${D.input && D.judged.verdict!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(D.input)}</p>`:""}` : `
-          <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
-                 spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
-                 style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">`}
-      </div>`;
-    const V = shown ? {
+    const V0 = shown ? {
       right:"Richtig.", typo:"Fast — achte auf die Schreibweise.",
       article:`Richtig, aber es heisst ${w.art} ${esc(w.nl)}.`,
       noarticle:`Fast — mit Artikel: ${w.art} ${esc(w.nl)}.`,
       synonym:"Auch richtig.", idk:"", wrong:"Leider nicht.", empty:""
     }[D.judged.verdict] : "";
+    const col0 = !shown ? "" : D.judged.verdict==="right" || D.judged.verdict==="synonym" ? "var(--moss)"
+      : ["typo","article","noarticle"].includes(D.judged.verdict) ? "var(--delft)" : "var(--clay)";
+    body = `
+      <div class="grow center">
+        ${shown ? `<p class="verdict" style="color:${col0}">${V0 || "&nbsp;"}</p>`
+                : `<p class="meta">Auf Niederländisch&nbsp;</p>`}
+        <p class="word${(shown?w.nl:w.de).length>14?" long":""}">${shown ? full : esc(w.de)}</p>
+        ${shown ? `<p class="trans">${esc(w.de)}</p>
+          ${D.input && D.judged.verdict!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(D.input)}</p>`:""}` : `
+          <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
+                 spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
+                 style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">`}
+      </div>`;
     bottom = `<div class="bottom">
-        <p class="note pad">${V || "&nbsp;"}</p>
+        <p class="note pad">&nbsp;</p>
         <button class="btn primary" ${shown?"data-next":"data-check"}>${shown?"Weiter":"Prüfen"}</button>
         ${shown ? `<button class="btn ghost ghosted" aria-hidden="true" tabindex="-1">&nbsp;</button>`
                 : `<button class="btn ghost" data-idk>Weiss ich nicht</button>`}
@@ -746,13 +774,13 @@ function Drill(){
     D.judged = judge(D.input, w);
     if(D.judged.verdict === "empty") return;
     // Nur der Tipp-Durchgang zählt für FSRS — Karte und Auswahl sind Übung.
-    applyRating(D.keys[D.i], autoRating(D.judged.verdict, Date.now()-D.shownAt, w, false));
+    drillGrade(D.order[D.i], D.judged.verdict, Date.now()-D.shownAt, w);
     D.typed++; save(); render();
   };
   on(n,"[data-check]", check);
   on(n,"[data-idk]", ()=>{
     D.input = ""; D.judged = { verdict:"idk" };
-    applyRating(D.keys[D.i], 1); D.typed++; save(); render();
+    drillGrade(D.order[D.i], "idk", 0, w); D.typed++; save(); render();
   });
   on(n,"[data-quit]", ()=> go(D.typed ? "drillDone" : "home"));
   const inp = n.querySelector("#ans");
@@ -769,7 +797,7 @@ function DrillDone(){
   n.innerHTML = header("Einprägen", "fertig") + `
     <div class="grow center">
       <p class="done">Durch.</p>
-      <p class="gloss dim">${D.keys.length} Wörter dreimal gesehen: Karte, Auswahl, Tippen.</p>
+      <p class="gloss dim">${D.keys.length} Wörter ${PHASES.length}-mal gesehen: ${PHASES.map(p=>p.label).join(", ")}.</p>
       <p class="note" style="margin-top:1.4rem">${moved ? `${moved} davon ${moved===1?"ist":"sind"} nach „Noch 2“ gewandert. ` : ""}${
         left ? `Noch ${left} Wörter für heute im Fach „Noch 3“.` : "Für heute ist „Noch 3“ durch."}</p>
     </div>
