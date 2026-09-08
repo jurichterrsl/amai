@@ -110,8 +110,23 @@ Wo immer das niederländische Wort zu sehen ist — auf der Auflösung wie auf d
 Kartenrückseite — steht die deutsche Bedeutung darunter, damit sich beide
 gegenüberstellen lassen.
 
-Wo ein Beispielsatz hinterlegt ist, steht er mit Lücke dazwischen. Die 256 ältesten
-Einträge haben einen, die übrigen nicht.
+Wo ein Beispielsatz hinterlegt ist, steht in der Frage zuerst der **deutsche
+Satz**, darunter das gesuchte Wort, darunter der niederländische Satz mit Lücke:
+
+    Mein Bruder ist Arzt.
+    ist (von zijn)
+    Mijn broer _____ arts.
+
+Die Aufgabe ist damit eine Übersetzung im Zusammenhang, nicht das Erraten eines
+isolierten Wortes. Auf der Auflösung erscheint der niederländische Satz vollständig,
+und darunter noch einmal der deutsche, damit beide nebeneinanderstehen. Auf der
+Kartenrückseite im Einprägen steht nur der niederländische Satz — der deutsche war
+schon auf der Vorderseite.
+
+Derzeit haben 2 780 von 4 882 Einträgen einen zweisprachigen Satz; die übrigen
+kommen nach Häufigkeit dazu. Die Testreihe prüft, dass kein deutscher Satz das
+gesuchte Wort selbst nennt — Lehnwörter, die in beiden Sprachen gleich lauten
+(*das Auto*), sind davon ausgenommen.
 
 Geurteilt wird in sechs Stufen:
 
@@ -217,7 +232,18 @@ sagt fast nichts darüber aus, ob das Wort in einem Monat noch da ist.
 Es gibt kein Tagesziel. Neue Wörter werden **pro Runde** zugeteilt, nicht pro
 Kalendertag — eine Woche Pause kostet dich also nichts.
 
-Eine Runde umfasst standardmässig **sieben Karten** (unter *Daten* änderbar) und
+Eine Abfrage-Runde umfasst standardmässig **sieben Karten**, eine Einprägen-Runde
+**fünf Wörter** — die aber viermal, also zwanzig Karten. Beide Zahlen stehen unter
+*Daten*.
+
+Die Fünf ist kein Zufall: Miller nannte 1956 sieben Einheiten als Kurzzeitgedächtnis-
+Kapazität, meinte das aber ausdrücklich als Faustzahl. Cowan kam 2001 auf etwa vier,
+wenn man Wiederholung und Bündelung unterbindet; andere Schätzungen liegen bei fünf
+bis sechs. Fünf ist die Mitte dieser Spanne. Für die Abfrage spielt das eine kleinere
+Rolle, weil dort jede Karte für sich steht; beim Einprägen kreist derselbe Satz
+Wörter viermal, und dann zählt, wie viele gleichzeitig im Kopf bleiben.
+
+Eine Abfrage-Runde umfasst standardmässig sieben Karten und
 besteht aus höchstens 70 % Wiederholungen, am längsten überfällige zuerst, der Rest
 sind neue Wörter.
 
@@ -242,6 +268,32 @@ Die Abstände selbst rechnet FSRS weiter in echten Tagen, nicht in Nutzungstagen
 Vergessen richtet sich nach verstrichener Zeit, nicht danach, wie oft die App
 offen war. Was sich an deinem Tempo orientiert, ist die **Menge**, nicht der
 **Zeitpunkt**.
+
+## Mehrdeutige Bedeutungen
+
+Wenn eine deutsche Bedeutung auf mehrere niederländische Wörter zeigt, ist die
+Karte nicht lösbar. Am Anfang war das bei **421 Bedeutungen** so, die **790 von
+4 898 Einträgen** betrafen — jede sechste Karte.
+
+Sie zerfallen in drei Arten, die unterschiedlich behandelt werden:
+
+**Deutsch ist die mehrdeutige Seite.** `nach` steht für `naar` (Richtung) und `na`
+(Zeit); `machen` für `doen` und `maken`. Das sind verschiedene Wörter, die man
+auseinanderhalten muss. Hier bekommt die deutsche Seite einen Zusatz:
+*nach (zeitlich)* gegen *nach, zu (Richtung)*.
+
+**Echte Synonyme.** `makkelijk` / `gemakkelijk` sind dasselbe Wort, `ineens` /
+`opeens` dieselbe Bedeutung. Solche Paare sind zu **einem Eintrag
+zusammengeführt**: das Feld `alt` trägt die Nebenform, angezeigt werden beide
+(*meteen / dadelijk*), und beim Tippen zählt jede von beiden als richtig. Derzeit
+16 Paare.
+
+**Schlicht zu bequeme Glossen.** Fünf Wörter mit *ordentlich* zu übersetzen war
+Nachlässigkeit, keine Sprachtatsache — die sind jetzt unterschieden.
+
+Übrig sind **3 mehrdeutige Bedeutungen**. Zusätzlich prüft die Testreihe, dass
+kein Klammerzusatz die Lösung verrät: *die Abneigung (een hekel hebben aan)* nannte
+das gesuchte Wort im Hinweis.
 
 ## Wörter ergänzen
 

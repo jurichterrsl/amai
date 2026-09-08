@@ -138,7 +138,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v28";        // muss zu CACHE in sw.js passen
+const VERSION = "v32";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -174,7 +174,7 @@ function buildGloss(){
 const todayStr = () => new Date().toISOString().slice(0,10);
 function freshState(){
   return { v:1, cards:{}, known:[], custom:[], lastExport:null,
-           settings:{ sessionSize:7, newPerDay:8, retention:0.90 },
+           settings:{ sessionSize:7, drillSize:5, newPerDay:8, retention:0.90 },
            daily:{ date:todayStr(), newDone:0 }, history:[] };
 }
 let S = freshState();
@@ -211,6 +211,12 @@ const shuffle = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.f
 const pick = a => a[Math.floor(Math.random()*a.length)];
 const POSNAME = { ww:"Verb", zn:"Substantiv", bn:"Adjektiv", bw:"Adverb" };
 const hasCloze = w => w.cloze && w.cloze.indexOf("{") >= 0;
+// Beispielsatz auf dem Auflösungsbildschirm: niederländisch, darunter deutsch.
+const sentencePair = w => !hasCloze(w) ? "" :
+  `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>` +
+  (w.clozeDe ? `<p class="note" style="margin-top:.25rem">${esc(w.clozeDe)}</p>` : "");
+const sentenceNl = w => !hasCloze(w) ? "" :
+  `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>`;
 const blanks = c => c.replace(/\{[^}]+\}/g, "\u2009_____\u2009");
 const filled = c => c.replace(/\{([^}]+)\}/g, "$1");
 function fmtDue(d){
@@ -298,7 +304,7 @@ const MODES = [
     hint: () => "Fällige Wiederholungen und neue Wörter",
     show: () => true },
   { id:"drill", label:"Einprägen",
-    hint: () => `${drillPool().length} Wörter aus „Noch 3“ — Karte, Auswahl, Tippen`,
+    hint: () => `${Math.min(drillPool().length, S.settings.drillSize)} von ${drillPool().length} aus „Noch 3“ — vier Durchgänge`,
     show: () => drillPool().length > 0 },
 ];
 function backupAge(){
@@ -405,6 +411,11 @@ function lev(a,b){
 }
 // Satzzeichen zuerst entfernen, dann Leerraum — sonst bleibt ein Rest-Leerzeichen
 // stehen und eine richtige Antwort wird als Tippfehler gewertet.
+// Alle gleichwertigen Formen eines Eintrags — die Hauptform und etwaige
+// Nebenformen aus `alt`. Für echte Synonyme, bei denen es gleich ist, welches
+// Wort herauskommt (praten / spreken).
+const forms = w => [w.nl].concat(w.alt || []);
+const shownForm = w => forms(w).map(f => (w.art ? w.art + " " : "") + f).join(" / ");
 const norm = s => (s||"").toLowerCase().replace(/[.,!?;:"']/g," ").replace(/\s+/g," ").trim();
 // Artikel darf mitgetippt werden; er wird getrennt geprüft.
 function splitArticle(s){
@@ -423,17 +434,19 @@ function autoRating(verdict, ms, w, first){
   return ms < budget ? 4 : ms < budget * 2.5 ? 3 : 2;
 }
 function judge(input, w){
-  const got = splitArticle(norm(input)), want = norm(w.nl);
+  const got = splitArticle(norm(input));
+  const wants = forms(w).map(norm);
+  const want = wants.find(x => x === got.word) || wants[0];
   if(!got.word) return { verdict:"empty" };
   // Bei Substantiven gehört der Artikel zum Wort. Fehlt er, ist die Antwort
   // unvollständig — das Geschlecht ist im Niederländischen nicht ableitbar.
   const needArt = w.pos === "zn" && w.art;
-  if(got.word === want){
+  if(wants.includes(got.word)){
     if(needArt && !got.art) return { verdict:"noarticle" };
     if(needArt && got.art !== w.art) return { verdict:"article" };
     return { verdict:"right" };
   }
-  if(lev(got.word, want) === 1) return { verdict:"typo" };
+  if(wants.some(x => lev(got.word, x) === 1)) return { verdict:"typo" };
   const other = WORDS.find(x => norm(x.nl) === got.word);
   if(other && (BYGLOSS.get(w.de.toLowerCase())||[]).includes(other.nl))
     return { verdict:"synonym", other };
@@ -509,11 +522,13 @@ function Session(){
   const head = header("Abfrage", `${R.i+1}/${R.items.length}${R.isNew?" · neu":""}`) +
     `<div class="bar"><i style="width:${prog}%"></i></div>`;
   const artLine = w.art ? `<span class="art">${w.art} </span>` : "";
+  const shown = shownForm(w);
   let body, bottom;
 
   if(R.phase === "ask"){
     body = `
       <div class="grow center">
+        ${w.clozeDe ? `<p class="sentence" style="margin-bottom:.9rem">${esc(w.clozeDe)}</p>` : ""}
         <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
         ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>` : ""}
         <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
@@ -535,8 +550,8 @@ function Session(){
     const verdictText = {
       right:  "Richtig.",
       typo:   "Fast — achte auf die Schreibweise.",
-      article: `Richtig, aber es heisst <b>${w.art} ${esc(w.nl)}</b>.`,
-      noarticle: `Fast — mit Artikel: <b>${w.art} ${esc(w.nl)}</b>.`,
+      article: `Richtig, aber es heisst <b>${esc(shownForm(w))}</b>.`,
+      noarticle: `Fast — mit Artikel: <b>${esc(shownForm(w))}</b>.`,
       synonym: `Auch richtig. Gesucht war <b>${w.art?w.art+" ":""}${esc(w.nl)}</b>.`,
       wrong:  R.judged.other ? `Das ist „${esc(R.judged.other.de)}“.` : "Leider nicht.",
       idk:    "",
@@ -545,10 +560,10 @@ function Session(){
     body = `
       <div class="grow center">
         <p class="verdict" style="color:${colour}">${verdictText || "&nbsp;"}</p>
-        <p class="word${w.nl.length>12?" long":""}">${artLine}${esc(w.nl)}</p>
+        <p class="word${shown.length>12?" long":""}">${esc(shown)}</p>
         <p class="trans">${esc(w.de)}</p>
         ${R.typed && v!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(R.typed)}</p>` : ""}
-        ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(filled(w.cloze))}</p>` : ""}
+        ${sentencePair(w)}
       </div>`;
     bottom = `<div class="bottom">
         <p class="note pad">${
@@ -648,7 +663,7 @@ function startDrill(){
   const pool = drillPool();
   if(!pool.length) return go("home");
   // Die wackeligsten auswählen, für die Vorführung mischen.
-  D.keys = pool.slice(0, S.settings.sessionSize);
+  D.keys = pool.slice(0, S.settings.drillSize);
   D.phase = 0; D.i = 0; D.right = 0; D.typed = 0;
   D.order = shuffle(D.keys);
   prepDrill();
@@ -689,15 +704,16 @@ function Drill(){
   const done = D.phase * D.keys.length + D.i;
   const head = header("Einprägen", `${ph.label} ${D.i+1}/${D.keys.length}`) +
     `<div class="bar"><i style="width:${Math.round(done/(D.keys.length*PHASES.length)*100)}%"></i></div>`;
-  const full = `${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}`;
+  const full = esc(shownForm(w));
   let body, bottom;
 
   if(ph.id === "card"){
     body = `
       <div class="grow center" data-flip style="cursor:pointer">
         <p class="meta">${D.flipped ? "Niederländisch" : "Deutsch"}</p>
+        ${!D.flipped && w.clozeDe ? `<p class="sentence" style="margin-bottom:.9rem">${esc(w.clozeDe)}</p>` : ""}
         <p class="word${(D.flipped?w.nl:w.de).length>12?" long":""}">${D.flipped ? full : esc(w.de)}</p>
-        ${D.flipped ? `<p class="trans">${esc(w.de)}</p>` : ""}
+        ${D.flipped ? `<p class="trans">${esc(w.de)}</p>${sentenceNl(w)}` : ""}
         <p class="note" style="margin-top:1.2rem">${D.flipped ? "Tippen dreht zurück" : "Tippen zum Umdrehen"}</p>
       </div>`;
     bottom = `<div class="bottom">
@@ -709,11 +725,12 @@ function Drill(){
   } else if(ph.id === "pickDe" || ph.id === "pickNl"){
     const picked = D.chosen !== null;
     const toDe = ph.id === "pickDe";
-    const label = o => toDe ? esc(o.de) : `${o.art?`<span class="art">${o.art} </span>`:""}${esc(o.nl)}`;
+    const label = o => toDe ? esc(o.de) : esc(shownForm(o));
     const promptWord = toDe ? full : esc(w.de);
     body = `
       <div class="grow center">
         <p class="meta">${toDe ? "Was heisst das?" : "Welches Wort passt?"}</p>
+        ${!toDe && w.clozeDe ? `<p class="sentence" style="margin-bottom:.7rem;font-size:1.15rem">${esc(w.clozeDe)}</p>` : ""}
         <p class="word${(toDe?w.nl:w.de).length>16?" long":""}">${promptWord}</p>
         <div class="stack" style="margin-top:1.5rem">
           ${D.options.map(o => {
@@ -733,8 +750,8 @@ function Drill(){
     const shown = D.judged !== null;
     const V0 = shown ? {
       right:"Richtig.", typo:"Fast — achte auf die Schreibweise.",
-      article:`Richtig, aber es heisst ${w.art} ${esc(w.nl)}.`,
-      noarticle:`Fast — mit Artikel: ${w.art} ${esc(w.nl)}.`,
+      article:`Richtig, aber es heisst ${esc(shownForm(w))}.`,
+      noarticle:`Fast — mit Artikel: ${esc(shownForm(w))}.`,
       synonym:"Auch richtig.", idk:"", wrong:"Leider nicht.", empty:""
     }[D.judged.verdict] : "";
     const col0 = !shown ? "" : D.judged.verdict==="right" || D.judged.verdict==="synonym" ? "var(--moss)"
@@ -742,10 +759,12 @@ function Drill(){
     body = `
       <div class="grow center">
         ${shown ? `<p class="verdict" style="color:${col0}">${V0 || "&nbsp;"}</p>`
-                : `<p class="meta">Auf Niederländisch&nbsp;</p>`}
+                : (w.clozeDe ? `<p class="sentence" style="margin-bottom:.9rem">${esc(w.clozeDe)}</p>` : `<p class="meta">Auf Niederländisch&nbsp;</p>`)}
         <p class="word${(shown?w.nl:w.de).length>14?" long":""}">${shown ? full : esc(w.de)}</p>
         ${shown ? `<p class="trans">${esc(w.de)}</p>
-          ${D.input && D.judged.verdict!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(D.input)}</p>`:""}` : `
+          ${D.input && D.judged.verdict!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(D.input)}</p>`:""}
+          ${sentencePair(w)}` : `
+          ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>` : ""}
           <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
                  spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
                  style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">`}
@@ -838,7 +857,7 @@ function Pool(){
       ? `<button class="link" data-back-in="${esc(k)}" title="zurück in den Pool">↺</button>`
       : `<button class="link" data-drop="${esc(k)}" title="als gekonnt ablegen">✕</button>`;
     return `<div class="pool">
-      <span class="nl">${w.art?`<span class="art">${w.art} </span>`:""}${esc(w.nl)}</span>
+      <span class="nl">${esc(shownForm(w))}</span>
       <span class="de">${esc(w.de)}</span>
       <span class="meta" style="width:3.6rem;text-align:right">${right}</span>${act}</div>`;
   };
@@ -847,7 +866,7 @@ function Pool(){
     if(q){
       const t = q.toLowerCase();
       ks = ks.filter(k => { const w = byKey(k);
-        return w.nl.toLowerCase().includes(t) || w.de.toLowerCase().includes(t); });
+        return forms(w).some(f=>f.toLowerCase().includes(t)) || w.de.toLowerCase().includes(t); });
     }
     if(!ks.length) return `<p class="note">${q ? "Nichts gefunden." : "Dieses Fach ist leer."}</p>`;
     return ks.slice(0,LIMIT).map(row).join("")
@@ -934,8 +953,14 @@ function Data(){
   const s = S.settings;
   n.innerHTML = header("Daten & Einstellungen", "", true) + `
     <div class="scroll">
-      <label for="s-size">Karten pro Runde</label>
-      <input id="s-size" type="number" inputmode="numeric" min="5" max="100" value="${s.sessionSize}">
+      <label for="s-size">Karten pro Abfrage-Runde</label>
+      <input id="s-size" type="number" inputmode="numeric" min="3" max="100" value="${s.sessionSize}">
+      <label for="s-drill">Wörter pro Einprägen-Runde</label>
+      <input id="s-drill" type="number" inputmode="numeric" min="2" max="20" value="${s.drillSize}">
+      <p class="note" style="margin-top:.4rem">Einprägen zeigt jedes Wort viermal, eine Runde
+      umfasst also das Vierfache an Karten. Fünf Wörter sind bewusst weniger als sieben:
+      im Fokus der Aufmerksamkeit lassen sich nach heutigem Stand etwa vier Dinge gleichzeitig
+      halten, nicht sieben.</p>
 
       <p class="note" style="margin-top:.4rem">Neue Wörter kommen pro Runde, nicht pro Tag —
       eine Pause kostet dich nichts. Wie viele, hängt davon ab, wie viel gerade zu
@@ -973,7 +998,8 @@ function Data(){
     <div class="bottom"></div>`;
 
   on(n,"[data-apply]", ()=>{
-    s.sessionSize = Math.max(5, Number(n.querySelector("#s-size").value)||20);
+    s.sessionSize = Math.max(3, Number(n.querySelector("#s-size").value)||7);
+    s.drillSize   = Math.min(20, Math.max(2, Number(n.querySelector("#s-drill").value)||5));
     s.retention   = Math.min(0.97, Math.max(0.8, Number(n.querySelector("#s-ret").value)||0.9));
     makeF(s.retention); save(); render();
   });
