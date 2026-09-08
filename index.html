@@ -138,7 +138,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v32";        // muss zu CACHE in sw.js passen
+const VERSION = "v34";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -155,6 +155,13 @@ function buildWords(st){
   const custom = (st.custom||[]).map(w => ({...w, custom:true}));
   WORDS = base.concat(custom).sort((a,b)=>a.rank-b.rank);
   WORDS.forEach((w,i)=>{ w.idx = i; if(w.key===undefined) w.key = w.nl; });
+  // Umbenannte Einträge: Lernstand unter dem alten Schlüssel mitnehmen.
+  const RENAMED = { beetje:"een beetje", heleboel:"een heleboel", poosje:"een poosje",
+                    kijkje:"een kijkje", dagje:"een dagje" };
+  for(const [oldK,newK] of Object.entries(RENAMED)){
+    if(st.cards && st.cards[oldK] && !st.cards[newK]){ st.cards[newK] = st.cards[oldK]; delete st.cards[oldK]; }
+    if(st.known){ const i = st.known.indexOf(oldK); if(i>=0) st.known[i] = newK; }
+  }
   buildGloss();
 }
 const byKey = k => WORDS.find(w=>w.key===k);
@@ -528,9 +535,8 @@ function Session(){
   if(R.phase === "ask"){
     body = `
       <div class="grow center">
-        ${w.clozeDe ? `<p class="sentence" style="margin-bottom:.9rem">${esc(w.clozeDe)}</p>` : ""}
         <p class="word${w.de.length>16?" long":""}">${esc(w.de)}</p>
-        ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>` : ""}
+        ${w.clozeDe ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(w.clozeDe)}</p>` : ""}
         <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
                spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
                style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">
@@ -711,8 +717,8 @@ function Drill(){
     body = `
       <div class="grow center" data-flip style="cursor:pointer">
         <p class="meta">${D.flipped ? "Niederländisch" : "Deutsch"}</p>
-        ${!D.flipped && w.clozeDe ? `<p class="sentence" style="margin-bottom:.9rem">${esc(w.clozeDe)}</p>` : ""}
         <p class="word${(D.flipped?w.nl:w.de).length>12?" long":""}">${D.flipped ? full : esc(w.de)}</p>
+        ${!D.flipped && w.clozeDe ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(w.clozeDe)}</p>` : ""}
         ${D.flipped ? `<p class="trans">${esc(w.de)}</p>${sentenceNl(w)}` : ""}
         <p class="note" style="margin-top:1.2rem">${D.flipped ? "Tippen dreht zurück" : "Tippen zum Umdrehen"}</p>
       </div>`;
@@ -730,8 +736,8 @@ function Drill(){
     body = `
       <div class="grow center">
         <p class="meta">${toDe ? "Was heisst das?" : "Welches Wort passt?"}</p>
-        ${!toDe && w.clozeDe ? `<p class="sentence" style="margin-bottom:.7rem;font-size:1.15rem">${esc(w.clozeDe)}</p>` : ""}
         <p class="word${(toDe?w.nl:w.de).length>16?" long":""}">${promptWord}</p>
+        ${!toDe && w.clozeDe ? `<p class="sentence dim" style="margin-top:.6rem;font-size:1.05rem">${esc(w.clozeDe)}</p>` : ""}
         <div class="stack" style="margin-top:1.5rem">
           ${D.options.map(o => {
             if(!picked) return `<button class="btn" data-pick="${esc(o.key)}">${label(o)}</button>`;
@@ -758,13 +764,12 @@ function Drill(){
       : ["typo","article","noarticle"].includes(D.judged.verdict) ? "var(--delft)" : "var(--clay)";
     body = `
       <div class="grow center">
-        ${shown ? `<p class="verdict" style="color:${col0}">${V0 || "&nbsp;"}</p>`
-                : (w.clozeDe ? `<p class="sentence" style="margin-bottom:.9rem">${esc(w.clozeDe)}</p>` : `<p class="meta">Auf Niederländisch&nbsp;</p>`)}
+        ${shown ? `<p class="verdict" style="color:${col0}">${V0 || "&nbsp;"}</p>` : `<p class="meta">Auf Niederländisch&nbsp;</p>`}
         <p class="word${(shown?w.nl:w.de).length>14?" long":""}">${shown ? full : esc(w.de)}</p>
         ${shown ? `<p class="trans">${esc(w.de)}</p>
           ${D.input && D.judged.verdict!=="right" ? `<p class="note" style="margin-top:.6rem">Du hattest: ${esc(D.input)}</p>`:""}
           ${sentencePair(w)}` : `
-          ${hasCloze(w) ? `<p class="sentence dim" style="margin-top:1rem;font-size:1.05rem">${esc(blanks(w.cloze))}</p>` : ""}
+          ${w.clozeDe ? `<p class="sentence dim" style="margin-top:1.2rem;font-size:1.05rem">${esc(w.clozeDe)}</p>` : ""}
           <input id="ans" type="text" autocomplete="off" autocapitalize="none" autocorrect="off"
                  spellcheck="false" lang="nl" enterkeyhint="go" placeholder="${w.art?"de/het + Wort":"tippen…"}"
                  style="margin-top:1.4rem;font-family:var(--serif);font-size:1.3rem">`}

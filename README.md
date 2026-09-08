@@ -110,23 +110,22 @@ Wo immer das niederländische Wort zu sehen ist — auf der Auflösung wie auf d
 Kartenrückseite — steht die deutsche Bedeutung darunter, damit sich beide
 gegenüberstellen lassen.
 
-Wo ein Beispielsatz hinterlegt ist, steht in der Frage zuerst der **deutsche
-Satz**, darunter das gesuchte Wort, darunter der niederländische Satz mit Lücke:
+**Jeder Eintrag hat einen zweisprachigen Beispielsatz.** In der Frage steht das
+gesuchte Wort gross, darunter der deutsche Satz in der kleinen Satzschrift:
 
-    Mein Bruder ist Arzt.
     ist (von zijn)
-    Mijn broer _____ arts.
+    Mein Bruder ist Arzt.
 
 Die Aufgabe ist damit eine Übersetzung im Zusammenhang, nicht das Erraten eines
-isolierten Wortes. Auf der Auflösung erscheint der niederländische Satz vollständig,
-und darunter noch einmal der deutsche, damit beide nebeneinanderstehen. Auf der
-Kartenrückseite im Einprägen steht nur der niederländische Satz — der deutsche war
-schon auf der Vorderseite.
+isolierten Wortes. Der niederländische Satz erscheint erst auf der Auflösung —
+vollständig, und darunter noch einmal der deutsche, damit beide nebeneinanderstehen.
+Auf der Kartenrückseite im Einprägen steht nur der niederländische Satz; der
+deutsche war schon auf der Vorderseite.
 
-Derzeit haben 2 780 von 4 882 Einträgen einen zweisprachigen Satz; die übrigen
-kommen nach Häufigkeit dazu. Die Testreihe prüft, dass kein deutscher Satz das
-gesuchte Wort selbst nennt — Lehnwörter, die in beiden Sprachen gleich lauten
-(*das Auto*), sind davon ausgenommen.
+Die Testreihe prüft, dass kein deutscher Satz das gesuchte Wort selbst nennt —
+Lehnwörter, die in beiden Sprachen gleich lauten (*das Auto*), sind davon
+ausgenommen. Wo ein deutscher Satz dennoch ein Homonym enthielt (*Die Frau, die dort
+steht* für `die`; *Es liegt in den Genen* für `genen`), wurde er umformuliert.
 
 Geurteilt wird in sechs Stufen:
 
@@ -294,6 +293,29 @@ Nachlässigkeit, keine Sprachtatsache — die sind jetzt unterschieden.
 Übrig sind **3 mehrdeutige Bedeutungen**. Zusätzlich prüft die Testreihe, dass
 kein Klammerzusatz die Lösung verrät: *die Abneigung (een hekel hebben aan)* nannte
 das gesuchte Wort im Hinweis.
+
+## Qualitätsprüfung der Daten
+
+Die Testreihe prüft die Wortliste als Ganzes, nicht nur die App:
+
+- Jedes Substantiv hat einen Artikel, und jede Substantiv-Glosse beginnt mit
+  *der/die/das*. Umgekehrt trägt kein Verb, Adjektiv oder Adverb einen Artikel.
+- Jeder Eintrag hat einen zweisprachigen Satz mit Lücke.
+- Kein deutscher Satz und kein Klammerzusatz nennt das gesuchte Wort. Gleichlautende
+  Lehnwörter (*das Auto*) sind ausgenommen.
+- Mengenwörter, die nur mit *een* vorkommen — *een beetje*, *een poosje*, *een
+  kijkje* — stehen mit dem *een* im Wort, nicht als Substantiv mit Artikel. Niemand
+  sagt *het beetje*; die Artikelpflicht hätte genau das verlangt.
+
+**Wie die Mehrdeutigkeiten aufgelöst sind.** Wo eine deutsche Bedeutung auf zwei
+niederländische Wörter zeigt, bleibt das geläufige deutsche Wort stehen und ein
+Klammerzusatz trennt die Bedeutungen: *fest (robust)* für `stevig`, *fest; sicherlich*
+für `vast`. Ein früherer Ansatz hatte stattdessen seltenere Synonyme eingesetzt
+(*angewachsen*, *kniffelig*) und dabei die eigentliche Bedeutung verloren — der Satz
+sagte *fest*, die Glosse etwas anderes. Das ist zurückgenommen.
+
+Klammerzusätze sind immer deutsch. *sehr (heel erg)* hätte die Lösung auf die
+Frage geschrieben.
 
 ## Wörter ergänzen
 
