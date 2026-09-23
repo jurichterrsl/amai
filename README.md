@@ -64,12 +64,11 @@ angekreuztes „kenne ich" hätte das nie aufgedeckt.
 **Abfrage** — der Normalbetrieb. Eine gemischte Runde aus fälligen Wiederholungen
 und neuen Wörtern, alles getippt. Das ist der Modus, der den Lernstand vorantreibt.
 
-**Einprägen** — für Wörter, die hängenbleiben. Er nimmt ausschliesslich Wörter aus
-dem Fach *Noch 3*, also die, die dir zuletzt nicht sassen, und geht mit ihnen
-dreimal durch, jeweils vollständig, bevor der nächste Durchgang beginnt:
+**Einprägen** — Training für Wörter, die hängenbleiben. Er nimmt ausschliesslich
+Wörter aus dem Fach *Noch 3* und geht mit ihnen viermal durch, jeweils vollständig,
+bevor der nächste Durchgang beginnt:
 
-1. **Karte** — deutsche Seite, Tippen dreht auf die niederländische. Auf der
-   Rückseite steht beides untereinander. Nur ansehen.
+1. **Karte** — deutsche Seite, Tippen dreht auf die niederländische. Nur ansehen.
 2. **Bedeutung** — das niederländische Wort und vier deutsche Bedeutungen zur Auswahl.
 3. **Wort** — die deutsche Bedeutung und vier niederländische Wörter zur Auswahl.
 4. **Tippen** — wie in der Abfrage, mit Artikel.
@@ -78,19 +77,16 @@ Die Ablenker kommen aus derselben Wortart mit ähnlicher Häufigkeit. **Jeder
 Durchgang mischt die Reihenfolge neu**, damit du nicht die Abfolge statt der
 Wörter lernst.
 
-**Nur der Tipp-Durchgang zählt für FSRS.** Karte und Auswahl sind Vorbereitung:
-Wiedererkennen ist deutlich leichter als Produzieren, und wenn das mitgerechnet
-würde, hielte der Scheduler dich für sicherer, als du bist.
+**Das Training verändert den Lernstand nicht.** Weder Stabilität noch Termin
+bewegen sich; nur die Abfrage tut das. Was das Training bringt, zeigt sich dort —
+als höhere Wahrscheinlichkeit, das Wort dann zu wissen. Das ist auch, was FSRS
+selbst nahelegt: eine zweite Abfrage am selben Tag ist kaum Beweis, dass ein Wort
+sitzt (Stabilität 0,3 wird zu 0,34), und vier Wiederholungen in vier Minuten
+bringen für das Langzeitgedächtnis weit weniger, als es sich anfühlt.
 
-**Welche Wörter genommen werden.** Aus *Noch 3* die mit der niedrigsten Stabilität
-zuerst — das sind die, die dem Vergessen am nächsten sind.
-
-Ausgeschlossen ist nur, was **heute schon eingeprägt** wurde. Ein Wort, das gerade
-eben in der Abfrage danebenging, lässt sich sofort einprägen; genau dafür ist der
-Modus da. Aufsteigen wird es an diesem Tag allerdings nicht mehr: FSRS wertet eine
-zweite Abfrage am selben Tag kaum, Stabilität 0,3 wird zu 0,34. Einen Tag später
-bringt dieselbe Antwort 0,3 auf 1,95 und mit *Leicht* auf 3,39 — und damit wandert
-das Wort nach *Noch 2*. Der Abschlussbildschirm sagt, wie viele aufgestiegen sind.
+**Welche Wörter genommen werden.** Alle aus *Noch 3*, die am längsten nicht geübten
+zuerst, so dass die Reihenfolge durch den ganzen Vorrat kreist. Es gibt keine
+Tagesgrenze — Training darf so oft laufen, wie man will.
 
 Die Modi stehen auf der Startseite untereinander, gleich eingefärbt, jeder mit
 einer Zeile, die sagt, was er tut. *Einprägen* erscheint nur, wenn für heute noch
@@ -98,6 +94,16 @@ etwas in *Noch 3* liegt, und nennt die Anzahl.
 
 Ein weiterer Modus ist ein weiterer Eintrag in der Liste `MODES` in `index.html`;
 das Markup passt sich an.
+
+**Gemerkt** — dasselbe Training wie Einprägen, aber für Wörter, die du selbst
+markiert hast. Auf jeder Auflösung in der Abfrage steht neben *Wort ist mir
+bekannt* ein *Merken*; ein zweites Tippen hebt die Markierung wieder auf. Die
+Merkliste ist unabhängig vom Lernstand: ein Wort kann gemerkt sein und zugleich
+in *Gekonnt* liegen. Auch dieses Training verändert nichts an Terminen.
+
+Einprägen und Gemerkt stehen auf der Startseite nebeneinander in einer Zeile.
+Ist ein Vorrat leer, bleibt der Knopf sichtbar, aber ausgegraut — damit die
+Merkliste ein Ziel hat, bevor sie gefüllt ist.
 
 ## Wie eine Karte abläuft
 
@@ -258,6 +264,18 @@ Gegen zu viel Schweres auf einmal wirken zwei andere Dinge, die das ohnehin bess
 tun: das **Schwierigkeitsfenster**, das die Ränge begrenzt, und die **Verdrängung** —
 sammeln sich Fehler an, füllen Wiederholungen die Runde und drücken die neuen
 Wörter von selbst auf zwei pro Runde herunter.
+
+**Ein Wort erscheint höchstens einmal am Tag — wenn du es gewusst hast.** Ein
+nicht gewusstes Wort bleibt fällig und kommt in der nächsten Runde wieder, auch am
+selben Tag. Das ist bewusst gegen den reinen Spacing-Gedanken entschieden: für ein
+Wort, das man gerade eben nicht wusste, ist die Wiederholung noch am selben Tag das,
+was man erwartet. (Zur Probe eingeführt; lässt sich zurücknehmen.)
+
+**Zielgenauigkeit 0,93.** FSRS plant die Termine so, dass die Erinnerungs-
+wahrscheinlichkeit beim Wiedersehen bei 93 % liegt. Die frühere Vorgabe war 0,90;
+0,93 verkürzt alle Intervalle spürbar und ist der Hebel, den FSRS für „ich wiederhole
+zu wenig“ vorsieht. Unter *Daten* einstellbar; bestehende Zustände mit 0,90 wurden
+einmalig angehoben.
 
 **Ein Rückstand wird nie angezeigt und nie eingefordert.** Wer nach einem Monat
 zurückkommt, bekommt dieselbe Runde wie immer; der Stau läuft über die folgenden

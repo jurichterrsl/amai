@@ -74,6 +74,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .btn.mode{text-align:left;padding:.7rem .9rem}
 .btn.mode b{display:block;font-weight:500;font-size:1.02rem}
 .btn.mode small{display:block;font-size:.76rem;opacity:.72;margin-top:.1rem}
+.btn.mode.off{opacity:.45}
+.row .btn.mode{flex:1;min-width:0}
+.row .btn.mode small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 @media (prefers-color-scheme:dark){.btn.primary{color:#0F1418}}
 .btn.ghost{background:transparent}
@@ -138,7 +141,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v34";        // muss zu CACHE in sw.js passen
+const VERSION = "v36";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -180,8 +183,8 @@ function buildGloss(){
 // ---------- State ----------
 const todayStr = () => new Date().toISOString().slice(0,10);
 function freshState(){
-  return { v:1, cards:{}, known:[], custom:[], lastExport:null,
-           settings:{ sessionSize:7, drillSize:5, newPerDay:8, retention:0.90 },
+  return { v:1, cards:{}, known:[], custom:[], marked:[], drilled:{}, lastExport:null,
+           settings:{ sessionSize:7, drillSize:5, newPerDay:8, retention:0.93 },
            daily:{ date:todayStr(), newDone:0 }, history:[] };
 }
 let S = freshState();
@@ -200,6 +203,13 @@ function load(){
     }
   }catch(e){ console.warn("State konnte nicht gelesen werden:", e); }
   if(S.daily.date !== todayStr()) S.daily = { date: todayStr(), newDone: 0 };
+  // Einmalig: die alte Vorgabe 0,90 auf 0,93 anheben. Wer bewusst einen anderen
+  // Wert eingestellt hat, ist davon nicht betroffen.
+  if(S.settings.retention === 0.9 && !S.retLifted){ S.settings.retention = 0.93; S.retLifted = true; }
+  if(!Array.isArray(S.marked)) S.marked = [];
+  if(!S.drilled) S.drilled = {};
+  // Ältere Zustände: Übungszeitpunkt aus der Karte herausziehen.
+  for(const k in S.cards){ if(S.cards[k].drilledAt){ S.drilled[k] = S.cards[k].drilledAt; delete S.cards[k].drilledAt; } }
   makeF(S.settings.retention);
   buildWords(S);
 }
@@ -306,13 +316,18 @@ function header(title, right, back){
    HOME
    ============================================================ */
 // Die Modi stehen untereinander. Ein weiterer ist ein weiterer Eintrag hier.
+// `row` gruppiert Modi in eine Zeile. Trainings ohne Wörter bleiben sichtbar,
+// aber ausgegraut — damit die Merkliste ein sichtbares Ziel hat, bevor sie gefüllt ist.
 const MODES = [
-  { id:"session", label:"Abfrage",
+  { id:"session", label:"Abfrage", row:1,
     hint: () => "Fällige Wiederholungen und neue Wörter",
-    show: () => true },
-  { id:"drill", label:"Einprägen",
-    hint: () => `${Math.min(drillPool().length, S.settings.drillSize)} von ${drillPool().length} aus „Noch 3“ — vier Durchgänge`,
-    show: () => drillPool().length > 0 },
+    count: () => 1 },
+  { id:"drill", label:"Einprägen", row:2,
+    hint: () => `${drillPool("b3").length} aus „Noch 3“`,
+    count: () => drillPool("b3").length },
+  { id:"marked", label:"Gemerkt", row:2,
+    hint: () => `${drillPool("marked").length} gemerkt`,
+    count: () => drillPool("marked").length },
 ];
 function backupAge(){
   if(!Object.keys(S.cards).length) return null;
@@ -338,9 +353,12 @@ function Home(){
         <div style="margin-top:1.6rem">${bar}</div>
       </div>
       <div class="bottom">
-        ${MODES.filter(m => m.show()).map(m => `
-          <button class="btn mode" data-go="${m.id}">
-            <b>${esc(m.label)}</b><small>${m.hint()}</small></button>`).join("")}
+        ${[...new Set(MODES.map(m=>m.row))].map(r => {
+          const ms = MODES.filter(m => m.row === r);
+          const btn = m => `<button class="btn mode${m.count()?"":" off"}" data-go="${m.id}" ${m.count()?"":"disabled"}>
+            <b>${esc(m.label)}</b><small>${m.hint()}</small></button>`;
+          return ms.length > 1 ? `<div class="row">${ms.map(btn).join("")}</div>` : btn(ms[0]);
+        }).join("")}
         <div class="row">
           <button class="btn ghost" data-go="pool">Pool</button>
           <button class="btn ghost" data-go="data">Daten</button>
@@ -352,7 +370,8 @@ function Home(){
   on(n, "[data-go]", e => {
     const v = e.currentTarget.dataset.go;
     if(v==="session") startSession();
-    else if(v==="drill") startDrill();
+    else if(v==="drill") startDrill("b3");
+    else if(v==="marked") startDrill("marked");
     else go(v);
   });
   return n;
@@ -479,7 +498,9 @@ function applyRating(key, rating){
   const prev = S.cards[key] || createEmptyCard(new Date());
   const out = F.repeat(prev, new Date())[rating];
   if(!S.cards[key]) S.daily.newDone++;
-  out.card.seenDay = todayStr();
+  // Ein gewusstes Wort ist für heute erledigt. Ein nicht gewusstes nicht: es
+  // bleibt fällig und kommt in der nächsten Runde wieder.
+  if(rating === 1) delete out.card.seenDay; else out.card.seenDay = todayStr();
   S.cards[key] = out.card;
   S.history.push({ k:key, r:rating, t:Date.now() });
   if(S.history.length > 4000) S.history = S.history.slice(-3000);
@@ -575,6 +596,7 @@ function Session(){
         <p class="note pad">${
           retires ? "Gekonnt — kommt nicht mehr"
           : willRequeue(R.key, rating) ? "Kommt in dieser Runde noch einmal"
+          : rating === 1 ? "Kommt in der nächsten Runde wieder"
           : (R.preview[rating] - Date.now()) < 86400000 ? "Morgen wieder"
           : "Wieder in " + fmtDue(R.preview[rating])}</p>
         <button class="btn primary" data-g="${rating}">Weiter</button>
@@ -584,7 +606,7 @@ function Session(){
 
   n.innerHTML = head + body + bottom +
     `<div style="padding-bottom:1rem"><button class="link" data-quit>Runde beenden</button>
-      <button class="link" data-skip style="float:right">Wort ist mir bekannt</button></div>`;
+      <span style="float:right">${R.judged ? `<button class="link" data-mark>${S.marked.includes(R.key) ? "Gemerkt ✓" : "Merken"}</button> · ` : ""}<button class="link" data-skip>Wort ist mir bekannt</button></span></div>`;
 
   const check = () => {
     const el = n.querySelector("#ans");
@@ -598,6 +620,11 @@ function Session(){
   on(n,"[data-idk]", ()=>{ R.typed=""; R.elapsed = 1e9; R.judged={verdict:"idk"}; R.phase="shown"; render(); });
   on(n,"[data-g]", e=> grade(Number(e.currentTarget.dataset.g)));
   on(n,"[data-quit]", ()=> go(R.answered ? "sessionDone" : "home"));
+  on(n,"[data-mark]", ()=>{
+    const i = S.marked.indexOf(R.key);
+    if(i >= 0) S.marked.splice(i,1); else S.marked.push(R.key);
+    save(); render();
+  });
   on(n,"[data-skip]", ()=>{
     if(!confirm(`„${w.nl}“ dauerhaft als bekannt markieren?`)) return;
     S.known.push(w.key); delete S.cards[w.key];
@@ -651,24 +678,26 @@ const PHASES = [
   { id:"pickNl", label:"Wort"      },  // deutsch gezeigt, niederländisches Wort wählen
   { id:"type",   label:"Tippen"    },
 ];
-// Wörter für „Einprägen\": die wackeligsten aus „Noch 3\" zuerst — niedrige
-// Stabilität heisst, sie sind dem Vergessen am nächsten.
-// Ausgeschlossen ist nur, was heute schon eingeprägt wurde — nicht, was heute
-// in der Abfrage vorkam. Ein Wort, das dort gerade danebenging, lässt sich
-// sofort einprägen; genau dafür ist der Modus da. Aufsteigen wird es heute
-// nicht mehr, weil FSRS eine zweite Abfrage am selben Tag kaum wertet
-// (Stabilität 0,3 -> 0,34 statt 0,3 -> 1,95 einen Tag später) — morgen schon.
-function drillPool(){
-  const today = todayStr();
-  return WORDS.filter(w => boxOf(w.key) === "b3" && S.cards[w.key] &&
-                           S.cards[w.key].drilledDay !== today)
-              .sort((a,b) => S.cards[a.key].stability - S.cards[b.key].stability)
+// Wörter für „Einprägen": alle aus „Noch 3", zuerst die am längsten nicht
+// geübten. Es gibt keine Tagesgrenze — der Modus ist Training und darf so oft
+// laufen, wie man will. Er verändert weder Stabilität noch Termin: nur die
+// Abfrage bewegt ein Wort. Was das Training bringt, zeigt sich dort — als
+// höhere Wahrscheinlichkeit, das Wort dann zu wissen.
+function drillPool(source){
+  source = source || D.source || "b3";
+  const inSource = source === "marked"
+    ? (w => S.marked.includes(w.key))
+    : (w => boxOf(w.key) === "b3" && S.cards[w.key]);
+  return WORDS.filter(inSource)
+              .sort((a,b) => (S.drilled[a.key]||0) - (S.drilled[b.key]||0)
+                          || ((S.cards[a.key]||{}).stability||0) - ((S.cards[b.key]||{}).stability||0))
               .map(w => w.key);
 }
-function startDrill(){
-  const pool = drillPool();
+function startDrill(source){
+  D.source = source || "b3";
+  const pool = drillPool(D.source);
   if(!pool.length) return go("home");
-  // Die wackeligsten auswählen, für die Vorführung mischen.
+  // Die am längsten nicht geübten zuerst; für die Vorführung gemischt.
   D.keys = pool.slice(0, S.settings.drillSize);
   D.phase = 0; D.i = 0; D.right = 0; D.typed = 0;
   D.order = shuffle(D.keys);
@@ -692,23 +721,16 @@ function drillNext(){
   }
   prepDrill(); render();
 }
-// Im Einprägen steigt ein Wort nur bei einer sauberen Antwort auf. Wer nach
-// Karte und zweimal Auswahl noch danebentippt oder den Artikel verfehlt, hat es
-// nicht sitzen — die Bewertung geht normal an FSRS, aber die Stabilität wird
-// unterhalb der Grenze zu „Noch 2“ gehalten.
-const CLEAN = { right:1, synonym:1 };
+// Das Training bewertet nicht. Es merkt sich nur, wann ein Wort zuletzt
+// geübt wurde, damit die Reihenfolge durch den ganzen Vorrat kreist.
 function drillGrade(key, verdict, ms, w){
-  applyRating(key, autoRating(verdict, ms, w, false));
-  S.cards[key].drilledDay = todayStr();
-  if(!CLEAN[verdict] && S.cards[key] && S.cards[key].stability >= 2){
-    S.cards[key].stability = 1.9;
-  }
+  S.drilled[key] = Date.now();   // getrennt von der Karte: legt keine an, ändert keine
 }
 function Drill(){
   const w = D.w, ph = PHASES[D.phase];
   const n = document.createElement("div"); n.className = "screen";
   const done = D.phase * D.keys.length + D.i;
-  const head = header("Einprägen", `${ph.label} ${D.i+1}/${D.keys.length}`) +
+  const head = header(D.source === "marked" ? "Gemerkt" : "Einprägen", `${ph.label} ${D.i+1}/${D.keys.length}`) +
     `<div class="bar"><i style="width:${Math.round(done/(D.keys.length*PHASES.length)*100)}%"></i></div>`;
   const full = esc(shownForm(w));
   let body, bottom;
@@ -817,19 +839,19 @@ function Drill(){
 function DrillDone(){
   const n = document.createElement("div"); n.className="screen";
   const left = drillPool().length;
-  const moved = (D.keys||[]).filter(k => boxOf(k) !== "b3").length;
-  n.innerHTML = header("Einprägen", "fertig") + `
+
+  n.innerHTML = header(D.source === "marked" ? "Gemerkt" : "Einprägen", "fertig") + `
     <div class="grow center">
       <p class="done">Durch.</p>
       <p class="gloss dim">${D.keys.length} Wörter ${PHASES.length}-mal gesehen: ${PHASES.map(p=>p.label).join(", ")}.</p>
-      <p class="note" style="margin-top:1.4rem">${moved ? `${moved} davon ${moved===1?"ist":"sind"} nach „Noch 2“ gewandert. ` : ""}${
-        left ? `Noch ${left} Wörter für heute im Fach „Noch 3“.` : "Für heute ist „Noch 3“ durch."}</p>
+      <p class="note" style="margin-top:1.4rem">Training verändert den Lernstand nicht — erst die Abfrage bewegt ein Wort.
+        ${left ? `${left} Wörter ${D.source==="marked"?"auf der Merkliste":"im Fach „Noch 3“"}; die am längsten nicht geübten kommen zuerst.` : ""}</p>
     </div>
     <div class="bottom">
       <button class="btn ghost" data-go="home">Schliessen</button>
       ${left ? `<button class="btn primary" data-go="more">Noch eine Runde</button>` : ""}
     </div>`;
-  on(n,"[data-go]", e => e.currentTarget.dataset.go==="more" ? startDrill() : go("home"));
+  on(n,"[data-go]", e => e.currentTarget.dataset.go==="more" ? startDrill(D.source) : go("home"));
   return n;
 }
 
@@ -1005,7 +1027,7 @@ function Data(){
   on(n,"[data-apply]", ()=>{
     s.sessionSize = Math.max(3, Number(n.querySelector("#s-size").value)||7);
     s.drillSize   = Math.min(20, Math.max(2, Number(n.querySelector("#s-drill").value)||5));
-    s.retention   = Math.min(0.97, Math.max(0.8, Number(n.querySelector("#s-ret").value)||0.9));
+    s.retention   = Math.min(0.97, Math.max(0.8, Number(n.querySelector("#s-ret").value)||0.93));
     makeF(s.retention); save(); render();
   });
   on(n,"[data-export]", async ()=>{
