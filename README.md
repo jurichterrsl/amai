@@ -101,6 +101,11 @@ bekannt* ein *Merken*; ein zweites Tippen hebt die Markierung wieder auf. Die
 Merkliste ist unabhängig vom Lernstand: ein Wort kann gemerkt sein und zugleich
 in *Gekonnt* liegen. Auch dieses Training verändert nichts an Terminen.
 
+Im letzten Durchgang, dem Tippen, steht auf der Auflösung derselbe Schalter —
+*Gemerkt ✓* nimmt ein Wort von der Liste, sobald es sitzt. Das laufende Training
+geht mit dem Wort noch zu Ende; in der nächsten Runde ist es nicht mehr dabei.
+Im Einprägen gibt es den Schalter ebenso, um von dort aus Wörter zu merken.
+
 Einprägen und Gemerkt stehen auf der Startseite nebeneinander in einer Zeile.
 Ist ein Vorrat leer, bleibt der Knopf sichtbar, aber ausgegraut — damit die
 Merkliste ein Ziel hat, bevor sie gefüllt ist.

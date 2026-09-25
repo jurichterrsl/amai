@@ -141,7 +141,7 @@ hr{border:none;border-top:1px solid var(--line-soft);margin:1.2rem 0}
    Amai — Flämisch B1/B2
    Datenmodell in localStorage unter KEY. Export/Import als JSON.
    ============================================================ */
-const VERSION = "v36";        // muss zu CACHE in sw.js passen
+const VERSION = "v38";        // muss zu CACHE in sw.js passen
 const KEY = "amai.v1";   // nicht umbenennen — daran hängt der gesamte Lernstand
 let PERSIST = "unbekannt";
 const app = document.getElementById("app");
@@ -805,9 +805,17 @@ function Drill(){
   }
 
   n.innerHTML = head + body + bottom +
-    `<div style="padding-bottom:1rem"><button class="link" data-quit>Abbrechen</button></div>`;
+    `<div style="padding-bottom:1rem"><button class="link" data-quit>Abbrechen</button>${
+      ph.id === "type" && D.judged
+        ? `<span style="float:right"><button class="link" data-mark>${S.marked.includes(D.order[D.i]) ? "Gemerkt ✓" : "Merken"}</button></span>`
+        : ""}</div>`;
 
   on(n,"[data-flip]", ()=>{ D.flipped = !D.flipped; render(); });
+  on(n,"[data-mark]", ()=>{
+    const k = D.order[D.i], i = S.marked.indexOf(k);
+    if(i >= 0) S.marked.splice(i,1); else S.marked.push(k);
+    save(); render();
+  });
   on(n,"[data-next]", ()=> drillNext());
   on(n,"[data-pick]", e=>{
     D.chosen = e.currentTarget.dataset.pick;
